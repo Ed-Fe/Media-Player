@@ -39,6 +39,7 @@ class EqualizerPresetDialog(wx.Dialog):
 
         intro_label = wx.StaticText(panel, label=intro_text)
         intro_label.Wrap(560)
+        self.intro_label = intro_label
         root_sizer.Add(intro_label, 0, wx.ALL | wx.EXPAND, 10)
 
         name_box = wx.StaticBoxSizer(wx.StaticBox(panel, label="Identificação do preset"), wx.VERTICAL)
@@ -123,6 +124,23 @@ class EqualizerPresetDialog(wx.Dialog):
 
         self.Bind(wx.EVT_BUTTON, self.on_confirm, id=wx.ID_OK)
         self.Bind(wx.EVT_CHAR_HOOK, self.on_key_down)
+
+    def configure_dialog(self, *, title, intro_text, preset_name, preamp_db, band_gains_db, validate_name, band_frequencies_hz):
+        self.SetTitle(title)
+        self._validate_name = validate_name
+        self._band_frequencies_hz = list(band_frequencies_hz or self._band_frequencies_hz)
+
+        self.Freeze()
+        try:
+            self.intro_label.SetLabel(intro_text)
+            self.intro_label.Wrap(560)
+            self._populate_controls(
+                preset_name=preset_name,
+                preamp_db=preamp_db,
+                band_gains_db=band_gains_db,
+            )
+        finally:
+            self.Thaw()
 
     def _build_gain_control(self, parent, *, name, help_text):
         control = wx.SpinCtrlDouble(

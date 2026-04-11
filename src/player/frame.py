@@ -44,6 +44,7 @@ class VLCPlayerFrame(
         self.Centre()
         self.Show()
         wx.CallAfter(self._initialize_player_state)
+        wx.CallAfter(self._prime_equalizer_ui)
 
     def _announce(self, message):
         if not self.settings.announcements_enabled:

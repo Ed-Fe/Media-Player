@@ -210,6 +210,7 @@ class EqualizerTabPanel(wx.Panel):
         )
 
     def update_view(self, *, target_tab_title, equalizer_enabled, presets, selected_preset_id, selected_preset, band_frequencies_hz):
+        self.Freeze()
         self._updating_controls = True
         try:
             self.target_tab_label.SetLabel(f"Aba alvo: {target_tab_title}")
@@ -231,7 +232,7 @@ class EqualizerTabPanel(wx.Panel):
             if self._choice_preset_ids:
                 self.preset_choice.SetSelection(selection_index)
 
-            self._refresh_value_rows(band_frequencies_hz)
+            rows_added = self._refresh_value_rows(band_frequencies_hz)
             preset_description = self._preset_description_text(selected_preset)
             self.preset_description_ctrl.ChangeValue(preset_description)
             self.preset_description_ctrl.SetInsertionPoint(0)
@@ -251,11 +252,14 @@ class EqualizerTabPanel(wx.Panel):
                     label.SetLabel("0.0 dB")
 
             self._update_action_buttons(selected_preset)
-            self.Layout()
+            if rows_added:
+                self.Layout()
         finally:
             self._updating_controls = False
+            self.Thaw()
 
     def _refresh_value_rows(self, band_frequencies_hz):
+        rows_added = False
         while len(self._band_value_labels) < len(band_frequencies_hz):
             frequency_index = len(self._band_value_labels)
             frequency_label = wx.StaticText(self, label=f"{format_frequency_label(band_frequencies_hz[frequency_index])}:")
@@ -263,6 +267,9 @@ class EqualizerTabPanel(wx.Panel):
             self._values_grid.Add(frequency_label, 0, wx.ALIGN_CENTER_VERTICAL)
             self._values_grid.Add(value_label, 0, wx.ALIGN_CENTER_VERTICAL)
             self._band_value_labels.append(value_label)
+            rows_added = True
+
+        return rows_added
 
     def on_toggle_enabled(self, event):
         if self._updating_controls:

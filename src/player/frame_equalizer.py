@@ -150,6 +150,11 @@ class FrameEqualizerMixin:
         return f"{message} Preset personalizado."
 
     def _create_equalizer_page(self, parent):
+        cached_page = getattr(self, "_equalizer_tab_page_cache", None)
+        if isinstance(cached_page, EqualizerTabPanel) and cached_page.GetParent() == parent:
+            self._equalizer_tab_page_cache = None
+            return cached_page
+
         return EqualizerTabPanel(
             parent,
             on_toggle_enabled=self.on_toggle_equalizer_enabled,
@@ -159,6 +164,42 @@ class FrameEqualizerMixin:
             on_duplicate_preset=self.on_duplicate_equalizer_preset,
             on_delete_preset=self.on_delete_equalizer_preset,
         )
+
+    def _prime_equalizer_ui(self):
+        if getattr(self, "_equalizer_ui_primed", False):
+            return
+
+        self._equalizer_ui_primed = True
+        if not self._equalizer_supported() or not hasattr(self, "notebook"):
+            return
+
+        if self._get_equalizer_panel() is None and not isinstance(
+            getattr(self, "_equalizer_tab_page_cache", None),
+            EqualizerTabPanel,
+        ):
+            self._equalizer_tab_page_cache = self._create_equalizer_page(self.notebook)
+
+        self._ensure_equalizer_preset_dialog()
+
+    def _dispose_equalizer_ui_cache(self):
+        dialog = getattr(self, "_equalizer_preset_dialog", None)
+        self._equalizer_preset_dialog = None
+        if isinstance(dialog, EqualizerPresetDialog):
+            try:
+                dialog.Destroy()
+            except Exception:
+                pass
+
+        cached_page = getattr(self, "_equalizer_tab_page_cache", None)
+        self._equalizer_tab_page_cache = None
+        if isinstance(cached_page, EqualizerTabPanel):
+            try:
+                cached_page.Destroy()
+            except Exception:
+                pass
+
+    def _refresh_equalizer_screen_later(self):
+        wx.CallAfter(self._refresh_equalizer_screen)
 
     def _get_equalizer_panel(self):
         if not hasattr(self, "playlists") or not hasattr(self, "notebook"):
@@ -208,9 +249,8 @@ class FrameEqualizerMixin:
             self._create_equalizer_page,
             select=True,
             activation_message="Aba Equalizador. Ajustes do som disponíveis para a aba de mídia ativa.",
-            on_activate=self._refresh_equalizer_screen,
+            on_activate=self._refresh_equalizer_screen_later,
         )
-        self._refresh_equalizer_screen()
 
     def on_toggle_equalizer_enabled(self, enabled):
         self._set_equalizer_for_target_tab(enabled=enabled, announce=True)
@@ -240,6 +280,34 @@ class FrameEqualizerMixin:
             sequence += 1
         return candidate
 
+    def _ensure_equalizer_preset_dialog(self):
+        dialog = getattr(self, "_equalizer_preset_dialog", None)
+        if isinstance(dialog, EqualizerPresetDialog):
+            return dialog
+
+        seed_preset = self._default_equalizer_preset()
+        if seed_preset is None:
+            return None
+
+        band_frequencies_hz = self._equalizer_band_frequencies()
+        dialog = EqualizerPresetDialog(
+            self,
+            title="Novo preset do equalizador",
+            intro_text=(
+                "Crie um preset personalizado. Os ajustes ficam salvos nas preferências e podem ser aplicados a qualquer aba de mídia."
+            ),
+            band_frequencies_hz=band_frequencies_hz,
+            preset_name=self._suggest_equalizer_preset_name("Preset personalizado"),
+            preamp_db=seed_preset.preamp_db,
+            band_gains_db=normalize_band_gains(
+                seed_preset.band_gains_db,
+                expected_count=len(band_frequencies_hz),
+            ),
+            validate_name=lambda name: self._validate_equalizer_preset_name(name),
+        )
+        self._equalizer_preset_dialog = dialog
+        return dialog
+
     def _show_equalizer_preset_dialog(
         self,
         *,
@@ -249,33 +317,37 @@ class FrameEqualizerMixin:
         preset_name,
         excluding_preset_id=None,
     ):
-        dialog = EqualizerPresetDialog(
-            self,
+        band_frequencies_hz = self._equalizer_band_frequencies()
+        dialog = self._ensure_equalizer_preset_dialog()
+        if dialog is None:
+            return None
+
+        expected_band_count = len(band_frequencies_hz)
+
+        dialog.configure_dialog(
             title=title,
             intro_text=intro_text,
-            band_frequencies_hz=self._equalizer_band_frequencies(),
             preset_name=preset_name,
             preamp_db=seed_preset.preamp_db,
             band_gains_db=normalize_band_gains(
                 seed_preset.band_gains_db,
-                expected_count=len(self._equalizer_band_frequencies()),
+                expected_count=expected_band_count,
             ),
             validate_name=lambda name: self._validate_equalizer_preset_name(
                 name,
                 excluding_preset_id=excluding_preset_id,
             ),
+            band_frequencies_hz=band_frequencies_hz,
         )
-        try:
-            if dialog.ShowModal() != wx.ID_OK:
-                return None
-            return dialog.get_preset_payload()
-        finally:
-            dialog.Destroy()
+        if dialog.ShowModal() != wx.ID_OK:
+            return None
+        return dialog.get_preset_payload()
 
-    def _append_custom_equalizer_preset(self, preset):
+    def _append_custom_equalizer_preset(self, preset, *, refresh=True):
         self.settings.equalizer_custom_presets.append(preset)
         self._save_settings()
-        self._refresh_equalizer_screen()
+        if refresh:
+            self._refresh_equalizer_screen()
 
     def on_create_equalizer_preset(self):
         if not self._ensure_equalizer_available():
@@ -305,7 +377,7 @@ class FrameEqualizerMixin:
                 expected_count=len(self._equalizer_band_frequencies()),
             ),
         )
-        self._append_custom_equalizer_preset(new_preset)
+        self._append_custom_equalizer_preset(new_preset, refresh=False)
         self._set_equalizer_for_target_tab(preset_id=new_preset.preset_id, enabled=True, announce=False)
         self._announce(f"Preset criado e aplicado: {new_preset.name}.")
 
@@ -313,7 +385,7 @@ class FrameEqualizerMixin:
         state = self._get_equalizer_target_state()
         return self._get_equalizer_preset(state.equalizer_preset_id if state else None)
 
-    def _replace_custom_equalizer_preset(self, updated_preset):
+    def _replace_custom_equalizer_preset(self, updated_preset, *, refresh=True):
         replaced = False
         updated_presets = []
         for preset in self.settings.equalizer_custom_presets:
@@ -328,7 +400,8 @@ class FrameEqualizerMixin:
 
         self.settings.equalizer_custom_presets = updated_presets
         self._save_settings()
-        self._refresh_equalizer_screen()
+        if refresh:
+            self._refresh_equalizer_screen()
 
     def on_edit_equalizer_preset(self):
         if not self._ensure_equalizer_available():
@@ -368,7 +441,7 @@ class FrameEqualizerMixin:
             ),
             preset_id=preset.preset_id,
         )
-        self._replace_custom_equalizer_preset(updated_preset)
+        self._replace_custom_equalizer_preset(updated_preset, refresh=False)
         self._apply_equalizer_state(self._get_equalizer_target_state())
         self._refresh_equalizer_screen()
         self._announce(f"Preset atualizado: {updated_preset.name}.")
@@ -391,7 +464,7 @@ class FrameEqualizerMixin:
                 expected_count=len(self._equalizer_band_frequencies()),
             ),
         )
-        self._append_custom_equalizer_preset(duplicated_preset)
+        self._append_custom_equalizer_preset(duplicated_preset, refresh=False)
         self._set_equalizer_for_target_tab(preset_id=duplicated_preset.preset_id, enabled=True, announce=False)
         self._announce(f"Preset criado e aplicado: {duplicated_preset.name}.")
         return True
