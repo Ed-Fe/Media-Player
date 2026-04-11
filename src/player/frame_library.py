@@ -166,7 +166,10 @@ class FrameLibraryMixin:
             else:
                 index = self._get_active_playlist_index()
 
-        if index == wx.NOT_FOUND:
+        if index == wx.NOT_FOUND or index is None:
+            return None
+
+        if not 0 <= index < self.notebook.GetPageCount():
             return None
 
         page = self.notebook.GetPage(index)
@@ -179,7 +182,10 @@ class FrameLibraryMixin:
         if index is None:
             index = self.notebook.GetSelection()
 
-        if index == wx.NOT_FOUND:
+        if index == wx.NOT_FOUND or index is None:
+            return None
+
+        if not 0 <= index < self.notebook.GetPageCount():
             return None
 
         page = self.notebook.GetPage(index)
@@ -228,6 +234,7 @@ class FrameLibraryMixin:
             return
 
         self.active_playlist_index = index
+        self._apply_equalizer_state(state)
 
         if not state.current_media_path:
             self._unload_player()

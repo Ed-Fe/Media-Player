@@ -5,5 +5,6 @@ from .frame import VLCPlayerFrame
 
 def main():
     app = wx.App(False)
-    VLCPlayerFrame()
+    frame = VLCPlayerFrame()
+    app.SetTopWindow(frame)
     app.MainLoop()

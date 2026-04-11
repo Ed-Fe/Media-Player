@@ -13,6 +13,7 @@ This project is in active development. The current version already supports day-
 - Embedded VLC playback inside a wxPython window
 - Multiple playlists in tabs
 - Folder browser with preview support
+- Tab-specific equalizer with built-in VLC presets and custom presets
 - `.m3u` / `.m3u8` playlist loading and saving
 - Session restore for tabs, current item, position, and volume
 - Persistent preferences in `settings.json`
@@ -68,6 +69,7 @@ python src/main.py
 - `Ctrl+T`: new playlist tab
 - `Ctrl+W`: close current media or close an empty tab
 - `Ctrl+PageUp` / `Ctrl+PageDown`: previous / next track
+- `Ctrl+Shift+E`: open the equalizer tab for the active media tab
 - `Ctrl+Tab` / `Ctrl+Shift+Tab`: next / previous tab
 - `Ctrl+Shift+P`: open playlist
 - `Ctrl+Shift+S`: save current playlist

@@ -2,6 +2,7 @@ import json
 import os
 from dataclasses import dataclass, field
 
+from .equalizer import EqualizerPreset
 from .constants import (
     DEFAULT_ANNOUNCEMENTS_ENABLED,
     DEFAULT_CONFIRM_ON_EXIT,
@@ -37,6 +38,7 @@ class AppSettings:
     recent_media_files: list[str] = field(default_factory=list)
     recent_folders: list[str] = field(default_factory=list)
     recent_playlists: list[str] = field(default_factory=list)
+    equalizer_custom_presets: list[EqualizerPreset] = field(default_factory=list)
 
     @property
     def seek_step_ms(self):
@@ -58,6 +60,7 @@ class AppSettings:
             "recent_media_files": list(self.recent_media_files),
             "recent_folders": list(self.recent_folders),
             "recent_playlists": list(self.recent_playlists),
+            "equalizer_custom_presets": [preset.to_dict() for preset in self.equalizer_custom_presets],
         }
 
     @classmethod
@@ -86,6 +89,7 @@ class AppSettings:
         settings.recent_media_files = _string_list(data.get("recent_media_files"))
         settings.recent_folders = _string_list(data.get("recent_folders"))
         settings.recent_playlists = _string_list(data.get("recent_playlists"))
+        settings.equalizer_custom_presets = _equalizer_preset_list(data.get("equalizer_custom_presets"))
         return settings
 
 
@@ -143,3 +147,16 @@ def _string_list(value):
             normalized_items.append(normalized_item)
 
     return normalized_items
+
+
+def _equalizer_preset_list(value):
+    if not isinstance(value, list):
+        return []
+
+    presets = []
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+        presets.append(EqualizerPreset.from_dict(item))
+
+    return presets

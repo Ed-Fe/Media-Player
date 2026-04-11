@@ -4,6 +4,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 
 from .constants import REPEAT_MODES, REPEAT_OFF
+from .equalizer import DEFAULT_EQUALIZER_PRESET_ID
 
 
 TAB_TYPE_PLAYLIST = "playlist"
@@ -83,6 +84,8 @@ class PlaylistState:
     folder_selected_path: str | None = None
     folder_entries: list = field(default_factory=list)
     browser_item_labels: list[str] = field(default_factory=list)
+    equalizer_enabled: bool = False
+    equalizer_preset_id: str = DEFAULT_EQUALIZER_PRESET_ID
 
     @property
     def is_empty(self):
@@ -294,6 +297,8 @@ class PlaylistState:
             "folder_root_path": self.folder_root_path,
             "folder_current_path": self.folder_current_path,
             "folder_selected_path": self.folder_selected_path,
+            "equalizer_enabled": self.equalizer_enabled,
+            "equalizer_preset_id": self.equalizer_preset_id,
         }
 
     @classmethod
@@ -309,6 +314,8 @@ class PlaylistState:
         state.folder_root_path = data.get("folder_root_path") or None
         state.folder_current_path = data.get("folder_current_path") or None
         state.folder_selected_path = data.get("folder_selected_path") or None
+        state.equalizer_enabled = bool(data.get("equalizer_enabled", False))
+        state.equalizer_preset_id = str(data.get("equalizer_preset_id") or DEFAULT_EQUALIZER_PRESET_ID)
 
         repeat_mode = data.get("repeat_mode", REPEAT_OFF)
         state.repeat_mode = repeat_mode if repeat_mode in REPEAT_MODES else REPEAT_OFF

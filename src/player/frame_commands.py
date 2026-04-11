@@ -330,6 +330,10 @@ class FrameCommandMixin:
             self.on_open_playlist(None)
             return
 
+        if event.ControlDown() and event.ShiftDown() and key_code in (ord("E"), ord("e")):
+            self.on_open_equalizer(None)
+            return
+
         if event.ControlDown() and event.ShiftDown() and key_code in (ord("S"), ord("s")):
             self.on_save_playlist(None)
             return

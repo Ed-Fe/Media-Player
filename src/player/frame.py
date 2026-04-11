@@ -3,6 +3,7 @@ import wx
 from .accessibility import ScreenReaderAnnouncer
 from .constants import APP_TITLE, DEFAULT_WINDOW_SIZE
 from .frame_commands import FrameCommandMixin
+from .frame_equalizer import FrameEqualizerMixin
 from .frame_library import FrameLibraryMixin
 from .frame_playback import FramePlaybackMixin
 from .frame_recents import FrameRecentsMixin
@@ -15,6 +16,7 @@ class VLCPlayerFrame(
     FrameCommandMixin,
     FrameSessionMixin,
     FrameRecentsMixin,
+    FrameEqualizerMixin,
     FrameLibraryMixin,
     FramePlaybackMixin,
     FrameUIMixin,
@@ -24,6 +26,7 @@ class VLCPlayerFrame(
         super().__init__(None, title=APP_TITLE, size=DEFAULT_WINDOW_SIZE)
 
         self.settings = load_settings()
+        self._initialize_equalizer_support()
         self.current_volume = self.settings.default_volume
         self.playlists = []
         self.active_playlist_index = None

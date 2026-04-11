@@ -283,6 +283,7 @@ class FramePlaybackMixin:
         self._event_manager = self.player.event_manager()
         self._event_manager.event_attach(vlc.EventType.MediaPlayerEndReached, self._on_media_end_reached)
         self._bind_player_to_window()
+        self._apply_equalizer_state()
         self._update_time_bar()
 
     def _toggle_play_pause(self):
