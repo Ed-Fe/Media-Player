@@ -32,6 +32,15 @@ jobs:
         run: |
           pyinstaller --noconfirm --windowed --name MediaPlayer --collect-submodules accessible_output2 --collect-data accessible_output2 src/main.py
 
+      - name: Build updater (PyInstaller)
+        run: |
+          pyinstaller --noconfirm --onefile --windowed --name MediaPlayerUpdater src/updater_main.py
+
+      - name: Bundle updater into dist
+        shell: powershell
+        run: |
+          Copy-Item -Path "dist\MediaPlayerUpdater.exe" -Destination "dist\MediaPlayer\MediaPlayerUpdater.exe" -Force
+
       - name: Install VLC runtime
         shell: powershell
         run: |
@@ -67,21 +76,33 @@ jobs:
       - name: Create release archive
         shell: powershell
         run: |
-          $archiveName = "MediaPlayer-windows-x64-with-vlc.zip"
+          $archiveName = "MediaPlayer-windows.zip"
           if (Test-Path $archiveName) {
             Remove-Item $archiveName -Force
           }
           Compress-Archive -Path "dist\MediaPlayer\*" -DestinationPath $archiveName
 
+      - name: Create release checksum
+        shell: powershell
+        run: |
+          $archiveName = "MediaPlayer-windows.zip"
+          $checksumFile = "$archiveName.sha256"
+          $hash = (Get-FileHash -Path $archiveName -Algorithm SHA256).Hash.ToLowerInvariant()
+          Set-Content -Path $checksumFile -Value "$hash  $archiveName" -Encoding ascii
+
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v4
         with:
-          name: MediaPlayer-windows-x64-with-vlc
-          path: MediaPlayer-windows-x64-with-vlc.zip
+          name: MediaPlayer-windows
+          path: |
+            MediaPlayer-windows.zip
+            MediaPlayer-windows.zip.sha256
 
       - name: Publish zip to GitHub Release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: MediaPlayer-windows-x64-with-vlc.zip
+          files: |
+            MediaPlayer-windows.zip
+            MediaPlayer-windows.zip.sha256
           generate_release_notes: true

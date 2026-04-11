@@ -8,10 +8,15 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 ## [Unreleased]
 
 ### Added
-- 
+- Verificação automática de atualizações ao iniciar a versão empacotada do Windows.
+- Visualização das notas da release antes de confirmar o download da atualização.
+- Diálogo de download com barra de progresso para baixar novas releases antes de instalar.
+- Atualizador externo para aplicar o ZIP da release sem sobrescrever arquivos em uso.
+- Geração e publicação do arquivo `MediaPlayer-windows.zip.sha256` nas releases.
+- Script local para gerar a release Windows e roteiro documentado para testar o atualizador ponta a ponta.
 
 ### Changed
-- 
+- Workflow de release do Windows para incluir `MediaPlayerUpdater.exe` no pacote publicado.
 
 ### Fixed
 - 

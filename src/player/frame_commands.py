@@ -454,7 +454,7 @@ class FrameCommandMixin:
         self.Close()
 
     def on_close(self, event):
-        if self.settings.confirm_on_exit and event.CanVeto():
+        if not getattr(self, "_update_restart_pending", False) and self.settings.confirm_on_exit and event.CanVeto():
             with wx.MessageDialog(
                 self,
                 "Deseja realmente sair do Media Player?",

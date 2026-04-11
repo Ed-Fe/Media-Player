@@ -67,13 +67,19 @@ This repository includes a GitHub Actions workflow at `.github/workflows/release
 When triggered (manually or by pushing a tag like `v1.2.3`), it will:
 
 1. Build the app with PyInstaller
-2. Install VLC on the runner
-3. Copy the VLC runtime to `dist/MediaPlayer/vlc`
-4. Create `MediaPlayer-windows-x64-with-vlc.zip`
-5. Upload the zip as a workflow artifact
-6. Attach the zip to the GitHub Release when running on a tag
+2. Build the external updater with PyInstaller
+3. Copy the updater to the release folder
+4. Install VLC on the runner
+5. Copy the VLC runtime to `dist/MediaPlayer/vlc`
+6. Create `MediaPlayer-windows.zip`
+7. Generate `MediaPlayer-windows.zip.sha256`
+8. Upload the files as workflow artifacts
+9. Attach the files to the GitHub Release when running on a tag
 
 The app startup now looks for a local `vlc/` folder before importing `python-vlc`, so the release can run on machines without VLC pre-installed.
+The Windows package also includes `MediaPlayerUpdater.exe`, used by the app to apply downloaded updates after the user confirms the installation.
+
+For a repeatable end-to-end updater test flow, see `docs/update-testing.md`.
 
 ## Main keyboard shortcuts
 
@@ -144,6 +150,14 @@ If you want to help:
 
 ```bash
 python -m compileall src
+```
+
+### Local Windows release build
+
+To generate a local packaged build for updater testing, use:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\build_windows_release.ps1
 ```
 
 ## Roadmap

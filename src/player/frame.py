@@ -9,6 +9,7 @@ from .frame_playback import FramePlaybackMixin
 from .frame_recents import FrameRecentsMixin
 from .frame_session import FrameSessionMixin
 from .frame_ui import FrameUIMixin
+from .frame_update import FrameUpdateMixin
 from .settings import load_settings, save_settings
 
 
@@ -19,6 +20,7 @@ class VLCPlayerFrame(
     FrameEqualizerMixin,
     FrameLibraryMixin,
     FramePlaybackMixin,
+    FrameUpdateMixin,
     FrameUIMixin,
     wx.Frame,
 ):
@@ -34,6 +36,9 @@ class VLCPlayerFrame(
         self._suppress_tab_change_event = False
         self._recent_menu_actions = {}
         self._recent_menu_ids = []
+        self._startup_update_check_scheduled = False
+        self._update_check_in_progress = False
+        self._update_restart_pending = False
 
         self._create_player_backend()
 
@@ -45,6 +50,7 @@ class VLCPlayerFrame(
         self.Show()
         wx.CallAfter(self._initialize_player_state)
         wx.CallAfter(self._prime_equalizer_ui)
+        wx.CallAfter(self._schedule_startup_update_check)
 
     def _announce(self, message):
         if not self.settings.announcements_enabled:

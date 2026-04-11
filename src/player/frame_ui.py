@@ -70,7 +70,10 @@ class FrameUIMixin:
         tabs_menu.Append(self.menu_previous_tab_id, "Aba A&nterior\tCtrl+Shift+Tab")
 
         settings_menu = wx.Menu()
+        self.menu_check_updates_id = wx.NewIdRef()
         self.menu_preferences_id = wx.NewIdRef()
+        settings_menu.Append(self.menu_check_updates_id, "Verificar &atualizações")
+        settings_menu.AppendSeparator()
         settings_menu.Append(self.menu_preferences_id, "&Preferências\tCtrl+,")
 
         menu_bar.Append(file_menu, "&Arquivo")
@@ -149,6 +152,7 @@ class FrameUIMixin:
         self.Bind(wx.EVT_MENU, self.on_toggle_playlist_browser, id=self.menu_playlist_browser_id)
         self.Bind(wx.EVT_MENU, self.on_next_tab, id=self.menu_next_tab_id)
         self.Bind(wx.EVT_MENU, self.on_previous_tab, id=self.menu_previous_tab_id)
+        self.Bind(wx.EVT_MENU, self.on_check_for_updates, id=self.menu_check_updates_id)
         self.Bind(wx.EVT_MENU, self.on_open_preferences, id=self.menu_preferences_id)
         self.Bind(wx.EVT_MENU, self.on_exit, id=wx.ID_EXIT)
 
