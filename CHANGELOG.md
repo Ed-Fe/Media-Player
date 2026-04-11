@@ -8,6 +8,17 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 ## [Unreleased]
 
 ### Added
+- 
+
+### Changed
+- 
+
+### Fixed
+- 
+
+## [0.2.0] - 2026-04-11
+
+### Added
 - Verificação automática de atualizações ao iniciar a versão empacotada do Windows.
 - Visualização das notas da release antes de confirmar o download da atualização.
 - Diálogo de download com barra de progresso para baixar novas releases antes de instalar.
