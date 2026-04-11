@@ -12,7 +12,7 @@ from datetime import datetime
 from pathlib import Path
 
 
-LOG_DIRECTORY = Path(tempfile.gettempdir()) / "MediaPlayerUpdater"
+LOG_DIRECTORY = Path(tempfile.gettempdir()) / "KeyTuneUpdater"
 LOG_FILE_PATH = LOG_DIRECTORY / "updater.log"
 WAIT_OBJECT_0 = 0x00000000
 WAIT_TIMEOUT = 0x00000102
@@ -41,7 +41,7 @@ def main() -> int:
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Aplica uma atualização do Media Player a partir de um arquivo ZIP.")
+    parser = argparse.ArgumentParser(description="Aplica uma atualização do KeyTune a partir de um arquivo ZIP.")
     parser.add_argument("--parent-pid", type=int, required=True)
     parser.add_argument("--app-dir", required=True)
     parser.add_argument("--package", required=True)
@@ -194,7 +194,7 @@ def log_message(message: str):
 
 def show_error_message(message: str):
     try:
-        ctypes.windll.user32.MessageBoxW(0, message, "Atualização do Media Player", 0x10)
+        ctypes.windll.user32.MessageBoxW(0, message, "Atualização do KeyTune", 0x10)
     except Exception:
         print(message, file=sys.stderr)
         time.sleep(5)

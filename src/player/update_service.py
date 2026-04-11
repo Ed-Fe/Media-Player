@@ -338,7 +338,7 @@ def _find_packaged_updater() -> Path | None:
 def _request_headers(accept_header: str) -> dict[str, str]:
     return {
         "Accept": accept_header,
-        "User-Agent": f"MediaPlayer/{APP_VERSION}",
+        "User-Agent": f"KeyTune/{APP_VERSION}",
     }
 
 

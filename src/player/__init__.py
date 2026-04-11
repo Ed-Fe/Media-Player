@@ -1,1 +1,1 @@
-"""Media player package."""
+"""KeyTune media player package."""

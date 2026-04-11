@@ -457,7 +457,7 @@ class FrameCommandMixin:
         if not getattr(self, "_update_restart_pending", False) and self.settings.confirm_on_exit and event.CanVeto():
             with wx.MessageDialog(
                 self,
-                "Deseja realmente sair do Media Player?",
+                "Deseja realmente sair do KeyTune?",
                 "Confirmar saída",
                 wx.YES_NO | wx.NO_DEFAULT | wx.ICON_QUESTION,
             ) as dialog:

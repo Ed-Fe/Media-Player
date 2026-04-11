@@ -11,7 +11,7 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 - 
 
 ### Changed
-- 
+- O aplicativo passou a se chamar **KeyTune** na interface e na documentação principal, sem o sufixo técnico.
 
 ### Fixed
 - 

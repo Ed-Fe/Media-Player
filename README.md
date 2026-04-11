@@ -1,6 +1,6 @@
-# Media Player (wx + VLC)
+# KeyTune
 
-An accessible media player prototype built with **Python**, **wxPython**, and **VLC**.
+An accessible media player prototype called **KeyTune**, built with **Python**, **wxPython**, and **VLC**.
 
 The project is keyboard-first and screen-reader-friendly, with support for playlists, folder browsing, session restore, and persistent user preferences.
 

@@ -1,4 +1,4 @@
-APP_TITLE = "Media Player (wx + VLC)"
+APP_TITLE = "KeyTune"
 APP_VERSION = "0.2.0"
 DEFAULT_WINDOW_SIZE = (980, 620)
 DEFAULT_VOLUME = 80
