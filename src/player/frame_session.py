@@ -13,10 +13,19 @@ class FrameSessionMixin:
         state.last_position_ms = max(0, current_time) if current_time is not None and current_time >= 0 else 0
         state.was_playing = bool(self.player.is_playing())
 
+    def _capture_active_playlist_state(self):
+        active_index = self._get_active_playlist_index()
+        if active_index is None or active_index < 0:
+            return
+
+        self._capture_tab_state(active_index)
+
     def _restore_media_state(self, media_path, position_ms=0, pause_after_restore=False):
         state = self._get_playlist_state()
         if not state or state.current_media_path != media_path:
             return
+
+        self._apply_current_volume()
 
         if position_ms > 0:
             self.player.set_time(position_ms)
@@ -90,7 +99,7 @@ class FrameSessionMixin:
 
     def _save_session(self):
         active_playlist_index = self._get_active_playlist_index()
-        self._capture_tab_state(active_playlist_index)
+        self._capture_active_playlist_state()
 
         playlist_states = []
         selected_tab = 0

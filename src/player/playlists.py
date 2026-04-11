@@ -50,6 +50,8 @@ class ScreenTabState:
     on_activate: Callable[[], None] | None = None
     on_close: Callable[[], None] | None = None
     persist_session: bool = False
+    return_to_tab_index: int | None = None
+    return_focus_mode: str | None = None
     tab_type: str = TAB_TYPE_SCREEN
 
     @property

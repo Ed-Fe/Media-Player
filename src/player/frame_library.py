@@ -89,6 +89,7 @@ class FrameLibraryMixin:
     ):
         for index, state in enumerate(self.playlists):
             if isinstance(state, ScreenTabState) and state.screen_id == screen_id:
+                self._remember_screen_tab_return_context(state)
                 state.title = title
                 state.activation_message = activation_message
                 state.on_activate = on_activate
@@ -106,6 +107,7 @@ class FrameLibraryMixin:
             on_activate=on_activate,
             on_close=on_close,
         )
+        self._remember_screen_tab_return_context(state)
         tab_index = self._insert_tab(state, page, select=select)
         if select:
             self._activate_tab(tab_index, announce=False)
@@ -121,6 +123,58 @@ class FrameLibraryMixin:
             repeat_mode=self.settings.repeat_mode_new_playlists,
         )
         return self._insert_tab(state, page, select=select)
+
+    def _playlist_focus_mode(self, index=None):
+        browser = self._get_browser_panel(index)
+        if browser and browser.is_item_navigation_active():
+            return "items"
+
+        return "player"
+
+    def _screen_tab_return_context(self):
+        current_index = self.notebook.GetSelection() if hasattr(self, "notebook") else wx.NOT_FOUND
+        current_state = self._get_tab_state(current_index)
+        if isinstance(current_state, PlaylistState):
+            return current_index, self._playlist_focus_mode(current_index)
+
+        active_index = self._get_active_playlist_index()
+        if active_index == wx.NOT_FOUND:
+            return None, None
+
+        return active_index, None
+
+    def _remember_screen_tab_return_context(self, screen_state):
+        if not isinstance(screen_state, ScreenTabState):
+            return
+
+        return_index, return_focus_mode = self._screen_tab_return_context()
+        if isinstance(return_index, int) and return_index >= 0:
+            screen_state.return_to_tab_index = return_index
+        if return_focus_mode is not None:
+            screen_state.return_focus_mode = return_focus_mode
+
+    def _resolve_screen_tab_close_target(self, current_index, total_tabs, screen_state):
+        fallback_index = current_index if current_index < total_tabs - 1 else current_index - 1
+        preferred_index = getattr(screen_state, "return_to_tab_index", None)
+        if not isinstance(preferred_index, int):
+            return fallback_index
+
+        adjusted_index = preferred_index - 1 if preferred_index > current_index else preferred_index
+        if 0 <= adjusted_index < total_tabs - 1:
+            return adjusted_index
+
+        return fallback_index
+
+    def _restore_screen_tab_focus(self, screen_state, next_state):
+        if not isinstance(screen_state, ScreenTabState) or not isinstance(next_state, PlaylistState):
+            return
+
+        if screen_state.return_focus_mode == "items":
+            self._focus_item_navigation(announce=False)
+            return
+
+        if screen_state.return_focus_mode == "player":
+            self._focus_player_controls(announce=False)
 
     def _reset_playlist_tabs(self):
         while self.notebook.GetPageCount():
@@ -233,6 +287,7 @@ class FrameLibraryMixin:
         if not state:
             return
 
+        previous_active_playlist_index = self._get_active_playlist_index()
         self.active_playlist_index = index
         self._apply_equalizer_state(state)
 
@@ -247,6 +302,15 @@ class FrameLibraryMixin:
                     )
                 else:
                     self._announce(f"{state.title}. Nenhuma mídia tocando agora.")
+            return
+
+        if previous_active_playlist_index == index and self._player_has_loaded_media(state.current_media_path):
+            self._bind_player_to_window()
+            self._update_title()
+            self._update_time_bar()
+            self._refresh_playlist_browser()
+            if announce:
+                self._announce(f"Aba {index + 1}: {state.title}. {self._describe_playlist_position(state)}")
             return
 
         pause_after_restore = not state.was_playing
@@ -772,7 +836,14 @@ class FrameLibraryMixin:
             self._announce("Não é possível fechar a última aba.")
             return False
 
-        next_index = current_index if current_index < total_tabs - 1 else current_index - 1
+        if isinstance(current_state, ScreenTabState):
+            self._capture_active_playlist_state()
+
+        next_index = (
+            self._resolve_screen_tab_close_target(current_index, total_tabs, current_state)
+            if isinstance(current_state, ScreenTabState)
+            else (current_index if current_index < total_tabs - 1 else current_index - 1)
+        )
         active_playlist_index = self._get_active_playlist_index()
 
         self._suppress_tab_change_event = True
@@ -797,6 +868,9 @@ class FrameLibraryMixin:
         self._refresh_playlist_browser()
 
         next_state = self._get_tab_state(next_index)
+        if isinstance(current_state, ScreenTabState):
+            self._restore_screen_tab_focus(current_state, next_state)
+
         if next_state:
             self._announce(
                 f"Aba fechada: {current_state.title if current_state else 'sem nome'}. "

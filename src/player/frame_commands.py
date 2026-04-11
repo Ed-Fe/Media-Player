@@ -250,8 +250,11 @@ class FrameCommandMixin:
             return
 
         old_index = event.GetOldSelection()
-        if old_index != wx.NOT_FOUND and self._get_playlist_state(old_index):
-            self._capture_tab_state(old_index)
+        if old_index != wx.NOT_FOUND:
+            if self._get_playlist_state(old_index):
+                self._capture_tab_state(old_index)
+            else:
+                self._capture_active_playlist_state()
 
         new_index = event.GetSelection()
         if new_index != wx.NOT_FOUND:

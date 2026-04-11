@@ -21,6 +21,7 @@ class FramePlaybackMixin:
 
     def _create_player_backend(self):
         self._playback_request_serial = 0
+        self._loaded_media_path = None
         self._playback_queue = queue.Queue()
         self._playback_worker = threading.Thread(target=self._playback_worker_loop, daemon=True)
         self.instance = self._build_vlc_instance()
@@ -37,6 +38,17 @@ class FramePlaybackMixin:
 
     def _on_media_end_reached(self, _event):
         wx.CallAfter(self._handle_media_end)
+
+    def _apply_current_volume(self):
+        if not hasattr(self, "player"):
+            return False
+
+        try:
+            self.player.audio_set_volume(int(self.current_volume))
+        except Exception:
+            return False
+
+        return True
 
     def _next_playback_request_serial(self):
         self._playback_request_serial += 1
@@ -68,7 +80,8 @@ class FramePlaybackMixin:
                 media = self.instance.media_new(request["media_path"])
                 self.player.stop()
                 self.player.set_media(media)
-                self.player.audio_set_volume(self.current_volume)
+                self._loaded_media_path = request["media_path"]
+                self._apply_current_volume()
                 self.player.play()
             except Exception as exc:
                 success = False
@@ -113,20 +126,21 @@ class FramePlaybackMixin:
             return
 
         if not success:
+            self._loaded_media_path = None
             if error_message:
                 self._announce(f"Não foi possível iniciar a mídia: {error_message}.")
             return
 
         restore_position_ms = request.get("restore_position_ms", 0)
         pause_after_start = request.get("pause_after_start", False)
-        if restore_position_ms > 0 or pause_after_start:
-            wx.CallLater(
-                RESTORE_DELAY_MS,
-                self._restore_media_state,
-                media_path,
-                restore_position_ms,
-                pause_after_start,
-            )
+        self._apply_current_volume()
+        wx.CallLater(
+            RESTORE_DELAY_MS,
+            self._restore_media_state,
+            media_path,
+            restore_position_ms,
+            pause_after_start,
+        )
 
         self._update_title()
         self._update_time_bar()
@@ -149,6 +163,7 @@ class FramePlaybackMixin:
 
     def _unload_player(self):
         self._next_playback_request_serial()
+        self._loaded_media_path = None
         self.player.stop()
         try:
             self.player.set_media(None)
@@ -176,8 +191,24 @@ class FramePlaybackMixin:
     def _load_media(self, media_path):
         media = self.instance.media_new(media_path)
         self.player.set_media(media)
+        self._loaded_media_path = media_path
         self._update_title()
         self._update_time_bar()
+
+    def _player_has_loaded_media(self, media_path):
+        if not media_path or not hasattr(self, "player"):
+            return False
+
+        if self.player.get_media() is None:
+            return False
+
+        loaded_media_path = str(getattr(self, "_loaded_media_path", "") or "").strip()
+        if not loaded_media_path:
+            return False
+
+        normalized_target = os.path.normcase(os.path.normpath(str(media_path)))
+        normalized_loaded = os.path.normcase(os.path.normpath(loaded_media_path))
+        return normalized_target == normalized_loaded
 
     def _media_label(self, media_path):
         if not media_path:
@@ -249,7 +280,7 @@ class FramePlaybackMixin:
 
     def _change_volume(self, delta):
         self.current_volume = max(0, min(100, self.current_volume + delta))
-        self.player.audio_set_volume(self.current_volume)
+        self._apply_current_volume()
 
     def _seek_to_start(self):
         if self.player.get_media() is None:
@@ -279,7 +310,8 @@ class FramePlaybackMixin:
             pass
 
         self.player = self.instance.media_player_new()
-        self.player.audio_set_volume(self.current_volume)
+        self._loaded_media_path = None
+        self._apply_current_volume()
         self._event_manager = self.player.event_manager()
         self._event_manager.event_attach(vlc.EventType.MediaPlayerEndReached, self._on_media_end_reached)
         self._bind_player_to_window()
