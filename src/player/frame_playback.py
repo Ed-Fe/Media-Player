@@ -329,11 +329,17 @@ class FramePlaybackMixin:
         self._announce(f"Volume atual: {self.current_volume}%.")
 
     def _announce_player_status(self):
+        current_tab = self._get_tab_state()
         state = self._get_playlist_state()
         status_parts = []
 
+        if current_tab:
+            status_parts.append(f"Aba atual: {current_tab.title}.")
+
+        if state and current_tab is not state:
+            status_parts.append(f"Aba de mídia ativa: {state.title}.")
+
         if state:
-            status_parts.append(f"Aba atual: {state.title}.")
             if state.is_folder_tab and state.folder_current_path:
                 status_parts.append(f"Pasta atual: {folder_display_name(state.folder_current_path)}.")
 

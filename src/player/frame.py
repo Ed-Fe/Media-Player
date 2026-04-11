@@ -26,6 +26,7 @@ class VLCPlayerFrame(
         self.settings = load_settings()
         self.current_volume = self.settings.default_volume
         self.playlists = []
+        self.active_playlist_index = None
         self.announcer = ScreenReaderAnnouncer()
         self._suppress_tab_change_event = False
         self._recent_menu_actions = {}

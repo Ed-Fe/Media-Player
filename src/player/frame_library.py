@@ -16,6 +16,7 @@ from .media import discover_folder_entries, discover_media_files, folder_display
 from .playlist_io import load_playlist, playlist_display_name
 from .playlists import (
     PlaylistState,
+    ScreenTabState,
     build_folder_tab_title,
     build_playlist_title,
     default_playlist_title,
@@ -23,40 +24,24 @@ from .playlists import (
 
 
 class FrameLibraryMixin:
-    def _create_empty_playlist_tab(self, select=False):
-        tab_number = len(self.playlists) + 1
-        title = default_playlist_title(tab_number)
-        page = self._create_playlist_page()
-        state = PlaylistState(
-            title=title,
-            shuffle_enabled=self.settings.shuffle_new_playlists,
-            repeat_mode=self.settings.repeat_mode_new_playlists,
-        )
-        self.playlists.append(state)
-        self.notebook.AddPage(page, title, select=select)
-        return len(self.playlists) - 1
+    def _insert_tab(self, state, page, select=False, index=None):
+        if index is None:
+            index = len(self.playlists)
 
-    def _reset_playlist_tabs(self):
-        while self.notebook.GetPageCount():
-            self.notebook.DeletePage(0)
+        index = max(0, min(index, len(self.playlists)))
+        self.playlists.insert(index, state)
 
-        self.playlists = []
-        self._create_empty_playlist_tab(select=True)
+        if index >= self.notebook.GetPageCount():
+            self.notebook.AddPage(page, state.title, select=select)
+        else:
+            self.notebook.InsertPage(index, page, state.title, select=select)
 
-    def _select_tab(self, index, announce=True):
-        current_index = self.notebook.GetSelection()
-        if index == current_index:
-            if announce:
-                self._activate_tab(index, announce=True)
-            return
+        if isinstance(state, PlaylistState) and self.active_playlist_index is None:
+            self.active_playlist_index = index
 
-        if current_index != wx.NOT_FOUND:
-            self._capture_tab_state(current_index)
+        return index
 
-        self.notebook.ChangeSelection(index)
-        self._activate_tab(index, announce=announce)
-
-    def _get_playlist_state(self, index=None):
+    def _get_tab_state(self, index=None):
         if not self.playlists:
             return None
 
@@ -68,13 +53,118 @@ class FrameLibraryMixin:
 
         return self.playlists[index]
 
+    def _get_active_playlist_index(self):
+        if (
+            self.active_playlist_index is not None
+            and 0 <= self.active_playlist_index < len(self.playlists)
+            and isinstance(self.playlists[self.active_playlist_index], PlaylistState)
+        ):
+            return self.active_playlist_index
+
+        for index, state in enumerate(self.playlists):
+            if isinstance(state, PlaylistState):
+                self.active_playlist_index = index
+                return index
+
+        self.active_playlist_index = None
+        return wx.NOT_FOUND
+
+    def _get_active_playlist_state(self):
+        active_index = self._get_active_playlist_index()
+        if active_index == wx.NOT_FOUND:
+            return None
+
+        return self.playlists[active_index]
+
+    def _open_screen_tab(
+        self,
+        screen_id,
+        title,
+        page_factory,
+        *,
+        select=True,
+        activation_message=None,
+        on_activate=None,
+        on_close=None,
+    ):
+        for index, state in enumerate(self.playlists):
+            if isinstance(state, ScreenTabState) and state.screen_id == screen_id:
+                state.title = title
+                state.activation_message = activation_message
+                state.on_activate = on_activate
+                state.on_close = on_close
+                self.notebook.SetPageText(index, title)
+                if select:
+                    self._select_tab(index, announce=True)
+                return index
+
+        page = page_factory(self.notebook)
+        state = ScreenTabState(
+            title=title,
+            screen_id=screen_id,
+            activation_message=activation_message,
+            on_activate=on_activate,
+            on_close=on_close,
+        )
+        tab_index = self._insert_tab(state, page, select=select)
+        if select:
+            self._activate_tab(tab_index, announce=False)
+        return tab_index
+
+    def _create_empty_playlist_tab(self, select=False):
+        tab_number = len(self.playlists) + 1
+        title = default_playlist_title(tab_number)
+        page = self._create_playlist_page()
+        state = PlaylistState(
+            title=title,
+            shuffle_enabled=self.settings.shuffle_new_playlists,
+            repeat_mode=self.settings.repeat_mode_new_playlists,
+        )
+        return self._insert_tab(state, page, select=select)
+
+    def _reset_playlist_tabs(self):
+        while self.notebook.GetPageCount():
+            self.notebook.DeletePage(0)
+
+        self.playlists = []
+        self.active_playlist_index = None
+        self._create_empty_playlist_tab(select=True)
+
+    def _select_tab(self, index, announce=True):
+        current_index = self.notebook.GetSelection()
+        if index == current_index:
+            if announce:
+                self._activate_tab(index, announce=True)
+            return
+
+        if current_index != wx.NOT_FOUND and isinstance(self._get_tab_state(current_index), PlaylistState):
+            self._capture_tab_state(current_index)
+
+        self.notebook.ChangeSelection(index)
+        self._activate_tab(index, announce=announce)
+
+    def _get_playlist_state(self, index=None):
+        if index is None:
+            selected_state = self._get_tab_state()
+            if isinstance(selected_state, PlaylistState):
+                return selected_state
+
+            return self._get_active_playlist_state()
+
+        state = self._get_tab_state(index)
+        return state if isinstance(state, PlaylistState) else None
+
     def _get_current_tab_index(self):
         index = self.notebook.GetSelection()
         return 0 if index == wx.NOT_FOUND else index
 
     def _get_video_panel(self, index=None):
         if index is None:
-            index = self.notebook.GetSelection()
+            selected_state = self._get_tab_state()
+            if isinstance(selected_state, PlaylistState):
+                index = self.notebook.GetSelection()
+            else:
+                index = self._get_active_playlist_index()
 
         if index == wx.NOT_FOUND:
             return None
@@ -99,11 +189,15 @@ class FrameLibraryMixin:
         return getattr(page, "browser_panel", None)
 
     def _prepare_playlist_tab(self, items, title, source_path=None):
-        state = self._get_playlist_state()
         current_index = self.notebook.GetSelection()
+        current_tab = self._get_tab_state(current_index)
+        state = current_tab if isinstance(current_tab, PlaylistState) else self._get_active_playlist_state()
 
-        if state and state.is_empty:
+        if isinstance(current_tab, PlaylistState) and current_tab.is_empty:
             target_index = current_index
+            state = current_tab
+        elif state and state.is_empty:
+            target_index = self._get_active_playlist_index()
         else:
             target_index = self._create_empty_playlist_tab(select=False)
             state = self._get_playlist_state(target_index)
@@ -117,9 +211,23 @@ class FrameLibraryMixin:
         return target_index
 
     def _activate_tab(self, index, announce=True):
+        tab_state = self._get_tab_state(index)
+        if not tab_state:
+            return
+
+        if isinstance(tab_state, ScreenTabState):
+            self._update_title()
+            if callable(tab_state.on_activate):
+                tab_state.on_activate()
+            if announce:
+                self._announce(tab_state.activation_message or f"Aba {index + 1}: {tab_state.title}.")
+            return
+
         state = self._get_playlist_state(index)
         if not state:
             return
+
+        self.active_playlist_index = index
 
         if not state.current_media_path:
             self._unload_player()
@@ -187,13 +295,23 @@ class FrameLibraryMixin:
         self._update_title()
         self._update_time_bar()
         self._refresh_playlist_browser()
+        target_index = self._get_active_playlist_index() if index is None else index
         self._queue_media_start(
             state.current_media_path,
-            tab_index=self._get_current_tab_index() if index is None else index,
+            tab_index=target_index,
             announce_message=announce_message,
         )
 
     def _update_title(self):
+        current_tab = self._get_tab_state()
+        if isinstance(current_tab, ScreenTabState):
+            title_parts = [APP_TITLE, current_tab.title]
+            active_state = self._get_active_playlist_state()
+            if active_state and active_state.current_media_path:
+                title_parts.append(self._media_label(active_state.current_media_path))
+            self.SetTitle(" — ".join(title_parts))
+            return
+
         state = self._get_playlist_state()
         if not state:
             self.SetTitle(APP_TITLE)
@@ -231,7 +349,7 @@ class FrameLibraryMixin:
             self._announce(boundary_message)
             return
 
-        self._play_media(index=self._get_current_tab_index())
+        self._play_media(index=self._get_active_playlist_index())
 
     def _jump_to_playlist_boundary(self, to_last=False):
         state = self._get_playlist_state()
@@ -246,7 +364,7 @@ class FrameLibraryMixin:
             return
 
         state.select_index(target_index)
-        self._play_media(index=self._get_current_tab_index())
+        self._play_media(index=self._get_active_playlist_index())
 
     def _move_current_item(self, direction):
         state = self._get_playlist_state()
@@ -344,7 +462,7 @@ class FrameLibraryMixin:
             next_index = min(item_index, len(state.items) - 1)
             state.select_index(next_index)
             self._play_media(
-                index=self._get_current_tab_index(),
+                index=self._get_active_playlist_index(),
                 announce_message=f"{announce_prefix}: {removed_name}. {self._describe_playlist_position(state)}",
             )
             return
@@ -358,6 +476,11 @@ class FrameLibraryMixin:
         self._announce(f"{announce_prefix}: {removed_name}. {state.item_count} itens na playlist.")
 
     def _close_current_media(self):
+        current_tab = self._get_tab_state()
+        if isinstance(current_tab, ScreenTabState):
+            self._close_current_tab()
+            return
+
         state = self._get_playlist_state()
         if state and state.is_folder_tab and state.current_media_path:
             state.current_index = -1
@@ -442,11 +565,15 @@ class FrameLibraryMixin:
         return True
 
     def _prepare_folder_tab(self, folder_path):
-        state = self._get_playlist_state()
         current_index = self.notebook.GetSelection()
+        current_tab = self._get_tab_state(current_index)
+        state = current_tab if isinstance(current_tab, PlaylistState) else self._get_active_playlist_state()
 
-        if state and state.is_empty:
+        if isinstance(current_tab, PlaylistState) and current_tab.is_empty:
             target_index = current_index
+            state = current_tab
+        elif state and state.is_empty:
+            target_index = self._get_active_playlist_index()
         else:
             target_index = self._create_empty_playlist_tab(select=False)
             state = self._get_playlist_state(target_index)
@@ -631,7 +758,7 @@ class FrameLibraryMixin:
 
     def _close_current_tab(self):
         current_index = self._get_current_tab_index()
-        current_state = self._get_playlist_state(current_index)
+        current_state = self._get_tab_state(current_index)
         total_tabs = self.notebook.GetPageCount()
 
         if total_tabs <= 1:
@@ -639,11 +766,22 @@ class FrameLibraryMixin:
             return False
 
         next_index = current_index if current_index < total_tabs - 1 else current_index - 1
+        active_playlist_index = self._get_active_playlist_index()
 
         self._suppress_tab_change_event = True
         try:
+            if isinstance(current_state, ScreenTabState) and callable(current_state.on_close):
+                current_state.on_close()
+
             self.playlists.pop(current_index)
             self.notebook.DeletePage(current_index)
+
+            if active_playlist_index != wx.NOT_FOUND:
+                if current_index == active_playlist_index:
+                    self.active_playlist_index = None
+                elif current_index < active_playlist_index:
+                    self.active_playlist_index = active_playlist_index - 1
+
             self.notebook.ChangeSelection(next_index)
         finally:
             self._suppress_tab_change_event = False
@@ -651,11 +789,15 @@ class FrameLibraryMixin:
         self._activate_tab(next_index, announce=False)
         self._refresh_playlist_browser()
 
-        next_state = self._get_playlist_state(next_index)
+        next_state = self._get_tab_state(next_index)
         if next_state:
             self._announce(
                 f"Aba fechada: {current_state.title if current_state else 'sem nome'}. "
-                f"Agora em {next_state.title}. {self._describe_playlist_position(next_state)}"
+                + (
+                    f"Agora em {next_state.title}. {self._describe_playlist_position(next_state)}"
+                    if isinstance(next_state, PlaylistState)
+                    else f"Agora em {next_state.title}."
+                )
             )
         else:
             self._announce("Aba fechada.")
@@ -678,7 +820,7 @@ class FrameLibraryMixin:
 
         if state.repeat_mode == REPEAT_ONE and state.current_media_path:
             self._play_media(
-                index=self.notebook.GetSelection(),
+                index=self._get_active_playlist_index(),
                 announce_message=f"Repetindo faixa atual. {self._describe_playlist_position(state)}",
             )
             return
@@ -696,7 +838,7 @@ class FrameLibraryMixin:
         if target:
             loop_prefix = "Nova volta da playlist. " if wrapped_cycle else ""
             self._play_media(
-                index=self.notebook.GetSelection(),
+                index=self._get_active_playlist_index(),
                 announce_message=f"{loop_prefix}{self._describe_playlist_position(state)}",
             )
             return

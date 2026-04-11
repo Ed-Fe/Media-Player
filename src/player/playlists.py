@@ -1,5 +1,6 @@
 import os
 import random
+from collections.abc import Callable
 from dataclasses import dataclass, field
 
 from .constants import REPEAT_MODES, REPEAT_OFF
@@ -7,6 +8,7 @@ from .constants import REPEAT_MODES, REPEAT_OFF
 
 TAB_TYPE_PLAYLIST = "playlist"
 TAB_TYPE_FOLDER = "folder"
+TAB_TYPE_SCREEN = "screen"
 
 
 def default_playlist_title(number):
@@ -40,6 +42,29 @@ def build_folder_tab_title(folder_path):
 
 
 @dataclass
+class ScreenTabState:
+    title: str
+    screen_id: str
+    activation_message: str | None = None
+    on_activate: Callable[[], None] | None = None
+    on_close: Callable[[], None] | None = None
+    persist_session: bool = False
+    tab_type: str = TAB_TYPE_SCREEN
+
+    @property
+    def is_empty(self):
+        return False
+
+    @property
+    def is_folder_tab(self):
+        return False
+
+    @property
+    def is_screen_tab(self):
+        return True
+
+
+@dataclass
 class PlaylistState:
     title: str
     items: list[str] = field(default_factory=list)
@@ -66,6 +91,10 @@ class PlaylistState:
     @property
     def is_folder_tab(self):
         return self.tab_type == TAB_TYPE_FOLDER
+
+    @property
+    def is_screen_tab(self):
+        return False
 
     @property
     def item_count(self):

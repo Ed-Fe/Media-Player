@@ -85,7 +85,9 @@ class FrameCommandMixin:
         self._remember_directory(playlist_path)
         state.source_path = playlist_path
         state.title = playlist_display_name(playlist_path)
-        self.notebook.SetPageText(self._get_current_tab_index(), state.title)
+        active_index = self._get_active_playlist_index()
+        if active_index != wx.NOT_FOUND:
+            self.notebook.SetPageText(active_index, state.title)
         self._update_title()
         self._refresh_playlist_browser()
         self._add_recent_path("recent_playlists", playlist_path)
@@ -188,7 +190,7 @@ class FrameCommandMixin:
             return
 
         state.select_index(item_index)
-        self._play_media(index=self._get_current_tab_index())
+        self._play_media(index=self._get_active_playlist_index())
 
     def on_playlist_browser_remove_item(self, item_index):
         self._remove_item_from_current_playlist(item_index)
@@ -246,7 +248,7 @@ class FrameCommandMixin:
             return
 
         old_index = event.GetOldSelection()
-        if old_index != wx.NOT_FOUND:
+        if old_index != wx.NOT_FOUND and self._get_playlist_state(old_index):
             self._capture_tab_state(old_index)
 
         new_index = event.GetSelection()

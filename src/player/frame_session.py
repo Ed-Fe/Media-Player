@@ -89,12 +89,24 @@ class FrameSessionMixin:
         return True
 
     def _save_session(self):
-        self._capture_tab_state(self._get_current_tab_index())
+        active_playlist_index = self._get_active_playlist_index()
+        self._capture_tab_state(active_playlist_index)
+
+        playlist_states = []
+        selected_tab = 0
+        for index, state in enumerate(self.playlists):
+            if not isinstance(state, PlaylistState):
+                continue
+
+            if index == active_playlist_index:
+                selected_tab = len(playlist_states)
+
+            playlist_states.append(state.to_dict())
 
         payload = {
-            "selected_tab": self._get_current_tab_index(),
+            "selected_tab": selected_tab,
             "volume": self.current_volume,
-            "playlists": [state.to_dict() for state in self.playlists],
+            "playlists": playlist_states,
         }
 
         if self.settings.remember_window_size:
