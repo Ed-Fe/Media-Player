@@ -95,6 +95,7 @@ For a repeatable end-to-end updater test flow, see `docs/update-testing.md`.
 - `Ctrl+Shift+P`: open playlist
 - `Ctrl+Shift+S`: save current playlist
 - `Ctrl+,`: open preferences
+- `F1`: open quick keyboard help
 - `F6`: switch focus between the item list and the player
 - `T`: announce playback time
 - `V`: announce volume

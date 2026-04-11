@@ -244,6 +244,9 @@ class FrameCommandMixin:
 
         self._announce("Preferências salvas.")
 
+    def on_show_keyboard_help(self, _event):
+        self._show_keyboard_help_dialog()
+
     def on_tab_changed(self, event):
         if self._suppress_tab_change_event:
             event.Skip()
@@ -267,6 +270,7 @@ class FrameCommandMixin:
 
     def on_video_panel_resize(self, _event):
         self._bind_player_to_window()
+        self._refresh_player_visual_hints()
 
     def on_video_panel_focus(self, _event):
         wx.CallAfter(self.SetFocus)
@@ -318,6 +322,10 @@ class FrameCommandMixin:
         key_code = event.GetKeyCode()
         browser = self._get_browser_panel()
         current_tab = self._get_tab_state()
+
+        if key_code == wx.WXK_F1:
+            self.on_show_keyboard_help(None)
+            return
 
         if key_code == wx.WXK_F6:
             self._toggle_navigation_mode()

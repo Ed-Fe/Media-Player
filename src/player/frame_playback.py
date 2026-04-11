@@ -241,6 +241,7 @@ class FramePlaybackMixin:
         if media is None:
             self.progress_label.SetLabel("Tempo: nenhuma mídia carregada.")
             self.progress_gauge.SetValue(0)
+            self._refresh_player_visual_hints()
             return
 
         current_time = self.player.get_time()
@@ -256,6 +257,7 @@ class FramePlaybackMixin:
                 self.progress_gauge.Pulse()
             else:
                 self.progress_gauge.SetValue(0)
+            self._refresh_player_visual_hints()
             return
 
         bounded_current_time = max(0, min(current_time, total_time))
@@ -265,6 +267,7 @@ class FramePlaybackMixin:
 
         self.progress_label.SetLabel(f"Tempo: {current_label} / {total_label} ({percentage}%)")
         self.progress_gauge.SetValue(max(0, min(PROGRESS_GAUGE_RANGE, gauge_value)))
+        self._refresh_player_visual_hints()
 
     def _seek_relative(self, delta_ms):
         if self.player.get_media() is None:
