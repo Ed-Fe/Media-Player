@@ -1,0 +1,46 @@
+APP_TITLE = "Media Player (wx + VLC)"
+DEFAULT_WINDOW_SIZE = (980, 620)
+DEFAULT_VOLUME = 80
+SEEK_STEP_MS = 5000
+VOLUME_STEP = 5
+RESTORE_DELAY_MS = 200
+PROGRESS_GAUGE_RANGE = 1000
+PROGRESS_TIMER_INTERVAL_MS = 500
+PLAYBACK_RESTART_THRESHOLD_MS = 3000
+EXPLORER_PREVIEW_DELAY_MS = 120
+DEFAULT_RESTORE_SESSION_ON_STARTUP = True
+DEFAULT_REMEMBER_WINDOW_SIZE = True
+DEFAULT_REMEMBER_LAST_FOLDER = True
+DEFAULT_CONFIRM_ON_EXIT = False
+DEFAULT_ANNOUNCEMENTS_ENABLED = True
+DEFAULT_NEW_PLAYLIST_SHUFFLE = False
+RECENT_ITEMS_LIMIT = 10
+
+REPEAT_OFF = "off"
+REPEAT_ONE = "one"
+REPEAT_ALL = "all"
+REPEAT_MODES = (REPEAT_OFF, REPEAT_ONE, REPEAT_ALL)
+REPEAT_MODE_LABELS = {
+    REPEAT_OFF: "Repetição desligada",
+    REPEAT_ONE: "Repetir faixa atual",
+    REPEAT_ALL: "Repetir playlist",
+}
+
+PLAYLIST_WILDCARD = (
+    "Playlists|*.m3u;*.m3u8|"
+    "Playlist M3U8|*.m3u8|"
+    "Playlist M3U|*.m3u|"
+    "Todos os arquivos|*.*"
+)
+
+SUPPORTED_MEDIA_EXTENSIONS = {
+    ".mp4",
+    ".mkv",
+    ".avi",
+    ".mov",
+    ".mp3",
+    ".wav",
+    ".flac",
+    ".aac",
+    ".ogg",
+}
