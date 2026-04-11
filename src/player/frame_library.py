@@ -134,26 +134,21 @@ class FrameLibraryMixin:
                     self._announce(f"{state.title}. Nenhuma mídia tocando agora.")
             return
 
-        self._load_media(state.current_media_path)
-        self._bind_player_to_window()
-        self.player.play()
-
         pause_after_restore = not state.was_playing
-        if state.last_position_ms > 0 or pause_after_restore:
-            wx.CallLater(
-                RESTORE_DELAY_MS,
-                self._restore_media_state,
-                state.current_media_path,
-                state.last_position_ms,
-                pause_after_restore,
-            )
-
         self._update_title()
         self._refresh_playlist_browser()
-        if announce:
-            self._announce(
-                f"Aba {index + 1}: {state.title}. {self._describe_playlist_position(state)}"
-            )
+        announce_message = (
+            f"Aba {index + 1}: {state.title}. {self._describe_playlist_position(state)}"
+            if announce
+            else None
+        )
+        self._queue_media_start(
+            state.current_media_path,
+            tab_index=index,
+            announce_message=announce_message,
+            restore_position_ms=state.last_position_ms,
+            pause_after_start=pause_after_restore,
+        )
 
     def _repeat_mode_message(self, repeat_mode):
         return REPEAT_MODE_LABELS.get(repeat_mode, REPEAT_MODE_LABELS[REPEAT_OFF])
@@ -187,20 +182,16 @@ class FrameLibraryMixin:
         if not state.current_media_path:
             return
 
-        self._load_media(state.current_media_path)
-        self._bind_player_to_window()
-        self.player.play()
         state.was_playing = True
         state.last_position_ms = 0
         self._update_title()
         self._update_time_bar()
         self._refresh_playlist_browser()
-
-        if announce_message is not None:
-            if announce_message:
-                self._announce(announce_message)
-        else:
-            self._announce(self._describe_playlist_position(state))
+        self._queue_media_start(
+            state.current_media_path,
+            tab_index=self._get_current_tab_index() if index is None else index,
+            announce_message=announce_message,
+        )
 
     def _update_title(self):
         state = self._get_playlist_state()
@@ -406,10 +397,16 @@ class FrameLibraryMixin:
         if not state or not state.is_folder_tab or not state.folder_current_path:
             return []
 
+        if state.folder_entries:
+            return list(state.folder_entries)
+
         try:
-            return discover_folder_entries(state.folder_current_path)
+            entries = discover_folder_entries(state.folder_current_path)
         except OSError:
-            return []
+            entries = []
+
+        state.set_folder_entries(entries)
+        return list(entries)
 
     def _configure_folder_tab_state(self, state, folder_path, root_path=None, selected_path=None):
         normalized_folder_path = self._normalize_path(folder_path)
@@ -429,10 +426,16 @@ class FrameLibraryMixin:
         state.source_path = None
 
         try:
+            folder_entries = discover_folder_entries(normalized_folder_path)
+        except OSError:
+            folder_entries = []
+
+        try:
             media_files = discover_media_files(normalized_folder_path)
         except OSError:
             media_files = []
 
+        state.set_folder_entries(folder_entries)
         state.set_items(media_files, auto_select=False)
         return True
 
@@ -490,11 +493,6 @@ class FrameLibraryMixin:
             self._refresh_playlist_browser()
             return
 
-        try:
-            media_files = discover_media_files(state.folder_current_path)
-        except OSError:
-            media_files = []
-
         same_media_already_playing = (
             state.current_media_path == normalized_media_path
             and self.player.get_media() is not None
@@ -502,7 +500,14 @@ class FrameLibraryMixin:
         )
 
         state.folder_selected_path = normalized_media_path
-        state.set_items(media_files, auto_select=False)
+
+        if normalized_media_path not in state.items:
+            try:
+                media_files = discover_media_files(state.folder_current_path)
+            except OSError:
+                media_files = []
+            state.set_items(media_files, auto_select=False)
+
         if normalized_media_path not in state.items:
             self._announce("O arquivo selecionado não pertence à pasta atual.")
             self._refresh_playlist_browser()

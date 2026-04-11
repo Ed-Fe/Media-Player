@@ -408,6 +408,7 @@ class FrameCommandMixin:
         if hasattr(self, "progress_timer") and self.progress_timer.IsRunning():
             self.progress_timer.Stop()
         self._save_session()
+        self._shutdown_player_backend()
         self.player.stop()
         self.announcer.close()
         self.Destroy()

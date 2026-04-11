@@ -56,6 +56,7 @@ class PlaylistState:
     folder_root_path: str | None = None
     folder_current_path: str | None = None
     folder_selected_path: str | None = None
+    folder_entries: list = field(default_factory=list)
 
     @property
     def is_empty(self):
@@ -107,12 +108,17 @@ class PlaylistState:
         self.folder_root_path = normalized_root_path
         self.folder_current_path = normalized_current_path
         self.folder_selected_path = str(selected_path or "").strip() or None
+        self.folder_entries = []
 
     def clear_folder_location(self):
         self.tab_type = TAB_TYPE_PLAYLIST
         self.folder_root_path = None
         self.folder_current_path = None
         self.folder_selected_path = None
+        self.folder_entries = []
+
+    def set_folder_entries(self, entries):
+        self.folder_entries = list(entries)
 
     def set_current_media_path(self, media_path):
         if not self.items or media_path not in self.items:

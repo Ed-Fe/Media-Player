@@ -1,10 +1,12 @@
 import os
+import queue
 import sys
+import threading
 
 import vlc
 import wx
 
-from .constants import PROGRESS_GAUGE_RANGE
+from .constants import LOCAL_FILE_CACHING_MS, PROGRESS_GAUGE_RANGE, RESTORE_DELAY_MS
 from .media import folder_display_name
 
 
@@ -18,13 +20,17 @@ class FramePlaybackMixin:
         self._announce("Nenhuma mídia tocando agora.")
 
     def _create_player_backend(self):
+        self._playback_request_serial = 0
+        self._playback_queue = queue.Queue()
+        self._playback_worker = threading.Thread(target=self._playback_worker_loop, daemon=True)
         self.instance = self._build_vlc_instance()
         self.player = self.instance.media_player_new()
         self._event_manager = self.player.event_manager()
         self._event_manager.event_attach(vlc.EventType.MediaPlayerEndReached, self._on_media_end_reached)
+        self._playback_worker.start()
 
     def _build_vlc_instance(self):
-        args = ["--quiet"]
+        args = ["--quiet", f"--file-caching={LOCAL_FILE_CACHING_MS}"]
         if sys.platform.startswith("linux"):
             args.append("--no-xlib")
         return vlc.Instance(*args)
@@ -32,7 +38,117 @@ class FramePlaybackMixin:
     def _on_media_end_reached(self, _event):
         wx.CallAfter(self._handle_media_end)
 
+    def _next_playback_request_serial(self):
+        self._playback_request_serial += 1
+        return self._playback_request_serial
+
+    def _playback_worker_loop(self):
+        while True:
+            request = self._playback_queue.get()
+            while True:
+                try:
+                    newer_request = self._playback_queue.get_nowait()
+                except queue.Empty:
+                    break
+                request = newer_request
+
+            if request.get("kind") == "shutdown":
+                return
+
+            if request.get("kind") != "play":
+                continue
+
+            request_serial = request.get("serial")
+            if request_serial != self._playback_request_serial:
+                continue
+
+            success = True
+            error_message = ""
+            try:
+                media = self.instance.media_new(request["media_path"])
+                self.player.stop()
+                self.player.set_media(media)
+                self.player.audio_set_volume(self.current_volume)
+                self.player.play()
+            except Exception as exc:
+                success = False
+                error_message = str(exc)
+
+            wx.CallAfter(
+                self._finish_media_start,
+                request,
+                success,
+                error_message,
+            )
+
+    def _queue_media_start(
+        self,
+        media_path,
+        *,
+        tab_index,
+        announce_message=None,
+        restore_position_ms=0,
+        pause_after_start=False,
+    ):
+        self._bind_player_to_window()
+        request = {
+            "kind": "play",
+            "serial": self._next_playback_request_serial(),
+            "media_path": media_path,
+            "tab_index": tab_index,
+            "announce_message": announce_message,
+            "restore_position_ms": restore_position_ms,
+            "pause_after_start": pause_after_start,
+        }
+        self._playback_queue.put(request)
+
+    def _finish_media_start(self, request, success, error_message):
+        if request.get("serial") != self._playback_request_serial:
+            return
+
+        tab_index = request.get("tab_index")
+        media_path = request.get("media_path")
+        state = self._get_playlist_state(tab_index)
+        if not state or state.current_media_path != media_path:
+            return
+
+        if not success:
+            if error_message:
+                self._announce(f"Não foi possível iniciar a mídia: {error_message}.")
+            return
+
+        restore_position_ms = request.get("restore_position_ms", 0)
+        pause_after_start = request.get("pause_after_start", False)
+        if restore_position_ms > 0 or pause_after_start:
+            wx.CallLater(
+                RESTORE_DELAY_MS,
+                self._restore_media_state,
+                media_path,
+                restore_position_ms,
+                pause_after_start,
+            )
+
+        self._update_title()
+        self._update_time_bar()
+        self._refresh_playlist_browser()
+
+        announce_message = request.get("announce_message")
+        if announce_message is not None:
+            if announce_message:
+                self._announce(announce_message)
+            return
+
+        self._announce(self._describe_playlist_position(state))
+
+    def _shutdown_player_backend(self):
+        self._next_playback_request_serial()
+        if hasattr(self, "_playback_queue"):
+            self._playback_queue.put({"kind": "shutdown"})
+        if hasattr(self, "_playback_worker") and self._playback_worker.is_alive():
+            self._playback_worker.join(timeout=1.0)
+
     def _unload_player(self):
+        self._next_playback_request_serial()
         self.player.stop()
         try:
             self.player.set_media(None)

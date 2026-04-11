@@ -2,8 +2,6 @@ import os
 
 import wx
 
-from .constants import EXPLORER_PREVIEW_DELAY_MS
-
 
 class PlaylistBrowserPanel(wx.Panel):
     def __init__(
@@ -25,8 +23,6 @@ class PlaylistBrowserPanel(wx.Panel):
         self._items = []
         self._mode = "playlist"
         self._suppress_selection_event = False
-        self._pending_preview_index = None
-        self._preview_timer = wx.Timer(self)
 
         root_sizer = wx.BoxSizer(wx.VERTICAL)
 
@@ -47,14 +43,11 @@ class PlaylistBrowserPanel(wx.Panel):
 
         self.items_list.Bind(wx.EVT_LISTBOX, self.on_selection_changed)
         self.items_list.Bind(wx.EVT_LISTBOX_DCLICK, self.on_activate)
-        self.Bind(wx.EVT_TIMER, self.on_preview_timer, self._preview_timer)
-        self.Bind(wx.EVT_CHAR_HOOK, self.on_key_down)
+        self.items_list.Bind(wx.EVT_CHAR_HOOK, self.on_key_down)
 
     def update_playlist(self, playlist_state):
         self._mode = "playlist"
         self._items = list(playlist_state.items)
-        self._preview_timer.Stop()
-        self._pending_preview_index = None
         self._suppress_selection_event = True
 
         if playlist_state.items:
@@ -62,12 +55,14 @@ class PlaylistBrowserPanel(wx.Panel):
                 self._format_label(index, item, playlist_state.current_index)
                 for index, item in enumerate(playlist_state.items)
             ]
-            self.items_list.Set(labels)
-            if 0 <= playlist_state.current_index < len(labels):
-                self.items_list.SetSelection(playlist_state.current_index)
+            selection = playlist_state.current_index if 0 <= playlist_state.current_index < len(labels) else wx.NOT_FOUND
+            self._update_list_items(labels, selection, preserve_focused_labels=True)
         else:
-            self.items_list.Set(["Nenhum item nesta playlist."])
-            self.items_list.SetSelection(wx.NOT_FOUND)
+            self._update_list_items(
+                ["Nenhum item nesta playlist."],
+                wx.NOT_FOUND,
+                preserve_focused_labels=True,
+            )
 
         self.header_label.SetLabel(
             f"{playlist_state.title} — {len(playlist_state.items)} item(ns)"
@@ -80,19 +75,18 @@ class PlaylistBrowserPanel(wx.Panel):
     def update_folder(self, title, current_path, entries, selected_path, current_media_path):
         self._mode = "folder"
         self._items = list(entries)
-        self._preview_timer.Stop()
-        self._pending_preview_index = None
         self._suppress_selection_event = True
 
         if entries:
             labels = [self._format_folder_label(entry, current_media_path) for entry in entries]
-            self.items_list.Set(labels)
             selection = self._find_selection(entries, selected_path, current_media_path)
-            if selection != wx.NOT_FOUND:
-                self.items_list.SetSelection(selection)
+            self._update_list_items(labels, selection, preserve_focused_labels=True)
         else:
-            self.items_list.Set(["Nenhuma pasta ou mídia nesta localização."])
-            self.items_list.SetSelection(wx.NOT_FOUND)
+            self._update_list_items(
+                ["Nenhuma pasta ou mídia nesta localização."],
+                wx.NOT_FOUND,
+                preserve_focused_labels=True,
+            )
 
         self.header_label.SetLabel(f"{title} — {current_path}")
         self.hint_label.SetLabel(
@@ -117,7 +111,7 @@ class PlaylistBrowserPanel(wx.Panel):
             return entry.label
 
         if getattr(entry, "is_directory", False):
-            return f"[Pasta] {entry.label}"
+            return entry.label
 
         prefix = "▶ " if getattr(entry, "path", None) == current_media_path else "   "
         return f"{prefix}{entry.label}"
@@ -138,6 +132,38 @@ class PlaylistBrowserPanel(wx.Panel):
                 return index
 
         return 0 if entries else wx.NOT_FOUND
+
+    def _strip_state_prefix(self, label):
+        if label.startswith("▶ "):
+            return label[2:]
+        if label.startswith("   "):
+            return label[3:]
+        return label
+
+    def _update_list_items(self, labels, selection, preserve_focused_labels=False):
+        current_labels = [self.items_list.GetString(index) for index in range(self.items_list.GetCount())]
+        focused_navigation = preserve_focused_labels and self.is_item_navigation_active()
+        current_base_labels = [self._strip_state_prefix(label) for label in current_labels]
+        target_base_labels = [self._strip_state_prefix(label) for label in labels]
+        labels_need_rebuild = current_base_labels != target_base_labels
+        labels_need_redraw = current_labels != labels
+
+        if labels_need_rebuild or (labels_need_redraw and not focused_navigation):
+            if len(current_labels) == len(labels):
+                for index, label in enumerate(labels):
+                    if current_labels[index] != label:
+                        self.items_list.SetString(index, label)
+            else:
+                self.items_list.Set(labels)
+
+        current_selection = self.items_list.GetSelection()
+        if selection == wx.NOT_FOUND:
+            if current_selection != wx.NOT_FOUND:
+                self.items_list.SetSelection(wx.NOT_FOUND)
+            return
+
+        if current_selection != selection:
+            self.items_list.SetSelection(selection)
 
     def _activate_selected(self):
         selection = self.items_list.GetSelection()
@@ -160,27 +186,13 @@ class PlaylistBrowserPanel(wx.Panel):
 
         selection = self.items_list.GetSelection()
         if selection == wx.NOT_FOUND or selection >= len(self._items):
-            self._preview_timer.Stop()
-            self._pending_preview_index = None
             return
 
         entry = self._items[selection]
         if not getattr(entry, "is_file", False) or not self._on_preview_item:
-            self._preview_timer.Stop()
-            self._pending_preview_index = None
             return
 
-        self._pending_preview_index = selection
-        self._preview_timer.StartOnce(EXPLORER_PREVIEW_DELAY_MS)
-
-    def on_preview_timer(self, _event):
-        if self._mode != "folder" or self._pending_preview_index is None:
-            return
-
-        selection = self._pending_preview_index
-        self._pending_preview_index = None
-        if self._on_preview_item:
-            self._on_preview_item(selection)
+        self._on_preview_item(selection)
 
     def on_key_down(self, event):
         key_code = event.GetKeyCode()
@@ -208,4 +220,4 @@ class PlaylistBrowserPanel(wx.Panel):
                 self._on_toggle_navigation_mode()
             return
 
-        event.Skip()
+        event.DoAllowNextEvent()
