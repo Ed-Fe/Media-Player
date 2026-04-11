@@ -24,7 +24,7 @@ This project is in active development. The current version already supports day-
 ## Requirements
 
 - Python 3.10 or newer
-- VLC Media Player installed on the system
+- VLC Media Player installed on the system (development mode)
 
 ## Installation
 
@@ -59,6 +59,21 @@ pip install -r requirements.txt
 ```bash
 python src/main.py
 ```
+
+## Windows release with bundled VLC
+
+This repository includes a GitHub Actions workflow at `.github/workflows/release-windows.yml`.
+
+When triggered (manually or by pushing a tag like `v1.2.3`), it will:
+
+1. Build the app with PyInstaller
+2. Install VLC on the runner
+3. Copy the VLC runtime to `dist/MediaPlayer/vlc`
+4. Create `MediaPlayer-windows-x64-with-vlc.zip`
+5. Upload the zip as a workflow artifact
+6. Attach the zip to the GitHub Release when running on a tag
+
+The app startup now looks for a local `vlc/` folder before importing `python-vlc`, so the release can run on machines without VLC pre-installed.
 
 ## Main keyboard shortcuts
 

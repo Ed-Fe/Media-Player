@@ -1,0 +1,86 @@
+name: Build Windows Release
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-release:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Build application (PyInstaller)
+        run: |
+          pyinstaller --noconfirm --windowed --name MediaPlayer src/main.py
+
+      - name: Install VLC runtime
+        shell: powershell
+        run: |
+          choco install vlc --yes --no-progress
+
+      - name: Bundle VLC runtime into dist
+        shell: powershell
+        run: |
+          $vlcSource = "C:\Program Files\VideoLAN\VLC"
+          if (-not (Test-Path $vlcSource)) {
+            throw "Pasta do VLC não encontrada em: $vlcSource"
+          }
+
+          $targetRoot = "dist\MediaPlayer\vlc"
+          New-Item -Path $targetRoot -ItemType Directory -Force | Out-Null
+          Copy-Item -Path "$vlcSource\*" -Destination $targetRoot -Recurse -Force
+
+          $licenseDir = "dist\MediaPlayer\THIRD_PARTY_LICENSES"
+          New-Item -Path $licenseDir -ItemType Directory -Force | Out-Null
+
+          $possibleLicenseFiles = @(
+            "$vlcSource\COPYING.txt",
+            "$vlcSource\COPYING",
+            "$vlcSource\AUTHORS.txt"
+          )
+
+          foreach ($file in $possibleLicenseFiles) {
+            if (Test-Path $file) {
+              Copy-Item -Path $file -Destination $licenseDir -Force
+            }
+          }
+
+      - name: Create release archive
+        shell: powershell
+        run: |
+          $archiveName = "MediaPlayer-windows-x64-with-vlc.zip"
+          if (Test-Path $archiveName) {
+            Remove-Item $archiveName -Force
+          }
+          Compress-Archive -Path "dist\MediaPlayer\*" -DestinationPath $archiveName
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MediaPlayer-windows-x64-with-vlc
+          path: MediaPlayer-windows-x64-with-vlc.zip
+
+      - name: Publish zip to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: MediaPlayer-windows-x64-with-vlc.zip
