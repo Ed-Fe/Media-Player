@@ -14,7 +14,9 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 - O aplicativo passou a se chamar **KeyTune** na interface e na documentação principal, sem o sufixo técnico.
 
 ### Fixed
-- 
+- Restauração do volume salvo ao abrir o app com sessão recuperada, aplicando corretamente o nível anterior já no início da reprodução.
+- Preservação da posição atual do áudio ao entrar e sair da aba do equalizador, sem voltar para o tempo em que a aba foi aberta.
+- Retorno ao modo de foco correto ao fechar o equalizador e eliminação do corte no áudio causado pelo recarregamento desnecessário da mesma mídia.
 
 ## [0.2.0] - 2026-04-11
 
