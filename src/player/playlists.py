@@ -57,6 +57,7 @@ class PlaylistState:
     folder_current_path: str | None = None
     folder_selected_path: str | None = None
     folder_entries: list = field(default_factory=list)
+    browser_item_labels: list[str] = field(default_factory=list)
 
     @property
     def is_empty(self):
@@ -72,6 +73,7 @@ class PlaylistState:
 
     def clear(self):
         self.items = []
+        self.browser_item_labels = []
         self.current_index = -1
         self.current_media_path = None
         self.last_position_ms = 0
@@ -79,8 +81,12 @@ class PlaylistState:
         self.playback_order = []
         self.playback_order_position = 0
 
+    def refresh_browser_item_labels(self):
+        self.browser_item_labels = [os.path.basename(item) or item for item in self.items]
+
     def set_items(self, items, start_index=0, auto_select=True):
         self.items = list(items)
+        self.refresh_browser_item_labels()
         if not self.items:
             self.current_index = -1
             self.current_media_path = None

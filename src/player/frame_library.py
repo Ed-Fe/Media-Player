@@ -279,6 +279,7 @@ class FrameLibraryMixin:
 
         moved_item = state.items.pop(current_index)
         state.items.insert(target_index, moved_item)
+        state.refresh_browser_item_labels()
         state.current_index = target_index
         state.current_media_path = moved_item
         state.reset_playback_order(preferred_index=target_index)
@@ -329,6 +330,7 @@ class FrameLibraryMixin:
             self.player.stop()
 
         state.items.pop(item_index)
+        state.refresh_browser_item_labels()
 
         if not state.items:
             state.clear()

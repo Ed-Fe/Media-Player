@@ -51,9 +51,13 @@ class PlaylistBrowserPanel(wx.Panel):
         self._suppress_selection_event = True
 
         if playlist_state.items:
+            base_labels = playlist_state.browser_item_labels
+            if len(base_labels) != len(playlist_state.items):
+                playlist_state.refresh_browser_item_labels()
+                base_labels = playlist_state.browser_item_labels
             labels = [
-                self._format_label(index, item, playlist_state.current_index)
-                for index, item in enumerate(playlist_state.items)
+                self._format_label(index, label, playlist_state.current_index)
+                for index, label in enumerate(base_labels)
             ]
             selection = playlist_state.current_index if 0 <= playlist_state.current_index < len(labels) else wx.NOT_FOUND
             self._update_list_items(labels, selection, preserve_focused_labels=True)
@@ -102,9 +106,9 @@ class PlaylistBrowserPanel(wx.Panel):
         focused_window = self.FindFocus()
         return self.IsShown() and focused_window is not None and focused_window is self.items_list
 
-    def _format_label(self, index, item, current_index):
+    def _format_label(self, index, item_label, current_index):
         prefix = "▶ " if index == current_index else "   "
-        return f"{prefix}{index + 1}. {os.path.basename(item) or item}"
+        return f"{prefix}{index + 1}. {item_label}"
 
     def _format_folder_label(self, entry, current_media_path):
         if getattr(entry, "is_parent", False):
