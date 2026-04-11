@@ -1,3 +1,5 @@
+import ast
+import re
 import uuid
 from dataclasses import dataclass, field
 
@@ -120,9 +122,40 @@ def generate_custom_preset_id():
     return f"{PRESET_SOURCE_CUSTOM}:{uuid.uuid4()}"
 
 
+def normalize_vlc_text(value):
+    if isinstance(value, (bytes, bytearray)):
+        return bytes(value).decode("utf-8", errors="replace")
+
+    text = str(value or "")
+    if len(text) >= 3 and text[0] in ("b", "B") and text[1] in ("'", '"') and text[-1] == text[1]:
+        try:
+            literal_value = ast.literal_eval(text)
+        except (SyntaxError, ValueError):
+            literal_value = None
+
+        if isinstance(literal_value, (bytes, bytearray)):
+            return bytes(literal_value).decode("utf-8", errors="replace")
+
+    return text
+
+
+def normalize_builtin_preset_key(preset_key):
+    normalized_key = normalize_vlc_text(preset_key).strip().lower()
+    return re.sub(r"[^a-z0-9]+", "", normalized_key)
+
+
 def build_builtin_preset_id(preset_key):
-    normalized_key = str(preset_key or "").strip().lower()
+    normalized_key = normalize_builtin_preset_key(preset_key)
     return f"{PRESET_SOURCE_BUILTIN}:{normalized_key}"
+
+
+def normalize_equalizer_preset_id(preset_id):
+    normalized_preset_id = str(preset_id or "").strip()
+    if not normalized_preset_id.startswith(f"{PRESET_SOURCE_BUILTIN}:"):
+        return normalized_preset_id
+
+    _source, raw_key = normalized_preset_id.split(":", 1)
+    return build_builtin_preset_id(raw_key)
 
 
 def clamp_gain_db(value):
@@ -230,11 +263,11 @@ def load_equalizer_catalog():
         preset_count = 0
 
     for preset_index in range(max(0, preset_count)):
-        preset_name = str(vlc.libvlc_audio_equalizer_get_preset_name(preset_index) or "").strip()
+        preset_name = normalize_vlc_text(vlc.libvlc_audio_equalizer_get_preset_name(preset_index)).strip()
         if not preset_name:
             continue
 
-        preset_key = preset_name.lower()
+        preset_key = normalize_builtin_preset_key(preset_name)
         equalizer = None
         try:
             equalizer = vlc.libvlc_audio_equalizer_new_from_preset(preset_index)
@@ -263,7 +296,7 @@ def load_equalizer_catalog():
                 band_gains_db=band_gains_db,
                 source=PRESET_SOURCE_BUILTIN,
                 builtin_key=preset_key,
-                description=VLC_PRESET_DESCRIPTIONS.get(preset_key, "Preset nativo do VLC."),
+                description=VLC_PRESET_DESCRIPTIONS.get(preset_key, f"Preset nativo do VLC: {preset_name}."),
             )
         )
 

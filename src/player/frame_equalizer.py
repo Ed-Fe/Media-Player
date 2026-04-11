@@ -10,6 +10,7 @@ from .equalizer import (
     build_vlc_equalizer,
     create_custom_preset,
     load_equalizer_catalog,
+    normalize_equalizer_preset_id,
     normalize_band_gains,
     normalize_custom_presets,
 )
@@ -56,7 +57,7 @@ class FrameEqualizerMixin:
         if not available_presets:
             return None
 
-        target_preset_id = str(preset_id or "").strip()
+        target_preset_id = normalize_equalizer_preset_id(preset_id)
         for preset in available_presets:
             if preset.preset_id == target_preset_id:
                 return preset
@@ -129,10 +130,24 @@ class FrameEqualizerMixin:
             return applied
 
         if state.equalizer_enabled:
-            self._announce(f"Equalizador na aba {state.title}: {preset.name}.")
+            self._announce(self._equalizer_enabled_message(state, preset, include_description=bool(preset_id is not None)))
         else:
             self._announce(f"Equalizador desativado na aba {state.title}.")
         return applied
+
+    def _equalizer_enabled_message(self, state, preset, *, include_description=False):
+        message = f"Equalizador na aba {state.title}: {preset.name}."
+        if not include_description:
+            return message
+
+        description = str(getattr(preset, "description", "") or "").strip()
+        if description:
+            return f"{message} {description}"
+
+        if preset.is_builtin:
+            return f"{message} Preset nativo do VLC."
+
+        return f"{message} Preset personalizado."
 
     def _create_equalizer_page(self, parent):
         return EqualizerTabPanel(

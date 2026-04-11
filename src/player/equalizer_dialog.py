@@ -1,5 +1,6 @@
 import wx
 
+from .accessibility import attach_named_accessible
 from .equalizer import (
     DEFAULT_EQUALIZER_PREAMP_DB,
     EQUALIZER_GAIN_MAX_DB,
@@ -31,6 +32,7 @@ class EqualizerPresetDialog(wx.Dialog):
         self._validate_name = validate_name
         self._band_frequencies_hz = list(band_frequencies_hz or [])
         self._band_controls = []
+        self._gain_control_names = {}
 
         panel = wx.Panel(self)
         root_sizer = wx.BoxSizer(wx.VERTICAL)
@@ -56,16 +58,12 @@ class EqualizerPresetDialog(wx.Dialog):
         root_sizer.Add(name_box, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND, 10)
 
         preamp_box = wx.StaticBoxSizer(wx.StaticBox(panel, label="Pré-amplificação"), wx.VERTICAL)
-        preamp_label = wx.StaticText(panel, label="Pré-amplificação (dB):")
-        self.preamp_ctrl = self._build_gain_control(panel, "Pré-amplificação")
-        preamp_help = wx.StaticText(
+        preamp_group, self.preamp_ctrl = self._build_gain_control_group(
             panel,
-            label="Ajusta o ganho geral antes das bandas. Se o som distorcer, reduza este valor.",
+            label_text="Pré-amplificação",
+            help_text="Ajusta o ganho geral antes das bandas. Se o som distorcer, reduza este valor.",
         )
-        preamp_help.Wrap(540)
-        preamp_box.Add(preamp_label, 0, wx.LEFT | wx.RIGHT | wx.TOP | wx.EXPAND, 6)
-        preamp_box.Add(self.preamp_ctrl, 0, wx.ALL | wx.EXPAND, 6)
-        preamp_box.Add(preamp_help, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND, 6)
+        preamp_box.Add(preamp_group, 0, wx.ALL | wx.EXPAND, 6)
         root_sizer.Add(preamp_box, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND, 10)
 
         bands_box = wx.StaticBoxSizer(wx.StaticBox(panel, label="Bandas do equalizador"), wx.VERTICAL)
@@ -79,10 +77,16 @@ class EqualizerPresetDialog(wx.Dialog):
         bands_grid = wx.FlexGridSizer(cols=2, hgap=10, vgap=8)
         bands_grid.AddGrowableCol(1, 1)
         for frequency_hz in self._band_frequencies_hz:
-            label = wx.StaticText(panel, label=f"{format_frequency_label(frequency_hz)}:")
-            control = self._build_gain_control(panel, f"Banda {format_frequency_label(frequency_hz)}")
-            bands_grid.Add(label, 0, wx.ALIGN_CENTER_VERTICAL)
-            bands_grid.Add(control, 0, wx.EXPAND)
+            frequency_label = format_frequency_label(frequency_hz)
+            group, control = self._build_gain_control_group(
+                panel,
+                label_text=f"Banda {frequency_label}",
+                help_text=(
+                    f"Ajusta o ganho da banda de {frequency_label}. "
+                    "Aceita valores de -20,0 dB até 20,0 dB."
+                ),
+            )
+            bands_grid.Add(group, 0, wx.EXPAND)
             self._band_controls.append(control)
 
         bands_box.Add(bands_grid, 0, wx.ALL | wx.EXPAND, 6)
@@ -91,6 +95,12 @@ class EqualizerPresetDialog(wx.Dialog):
         button_sizer = wx.StdDialogButtonSizer()
         self.save_button = wx.Button(panel, wx.ID_OK, "Salvar")
         self.cancel_button = wx.Button(panel, wx.ID_CANCEL, "Cancelar")
+        self.save_button.SetName("Salvar preset do equalizador")
+        self.save_button.SetHelpText("Salva o preset com o nome e os ajustes informados.")
+        self.save_button.SetToolTip("Salva o preset com o nome e os ajustes informados.")
+        self.cancel_button.SetName("Cancelar edição do preset do equalizador")
+        self.cancel_button.SetHelpText("Fecha a janela sem salvar as alterações do preset.")
+        self.cancel_button.SetToolTip("Fecha a janela sem salvar as alterações do preset.")
         self.save_button.SetDefault()
         button_sizer.AddButton(self.save_button)
         button_sizer.AddButton(self.cancel_button)
@@ -114,7 +124,7 @@ class EqualizerPresetDialog(wx.Dialog):
         self.Bind(wx.EVT_BUTTON, self.on_confirm, id=wx.ID_OK)
         self.Bind(wx.EVT_CHAR_HOOK, self.on_key_down)
 
-    def _build_gain_control(self, parent, name):
+    def _build_gain_control(self, parent, *, name, help_text):
         control = wx.SpinCtrlDouble(
             parent,
             min=EQUALIZER_GAIN_MIN_DB,
@@ -122,10 +132,49 @@ class EqualizerPresetDialog(wx.Dialog):
             inc=0.5,
         )
         control.SetDigits(1)
-        control.SetName(name)
-        control.SetHelpText("Aceita valores de -20,0 dB até 20,0 dB.")
-        control.SetToolTip("Aceita valores de -20,0 dB até 20,0 dB.")
+        control.SetName(f"{name} (dB)")
+        control.SetHelpText(help_text)
+        control.SetToolTip(help_text)
+        attach_named_accessible(
+            control,
+            name=f"{name} em decibéis",
+            description=help_text,
+            value_provider=lambda current_control=control: f"{float(current_control.GetValue()):+.1f} dB",
+        )
+        self._gain_control_names[control.GetId()] = name
+        control.Bind(wx.EVT_SET_FOCUS, self.on_gain_control_focus)
+        control.Bind(wx.EVT_SPINCTRLDOUBLE, self.on_gain_control_changed)
         return control
+
+    def _build_gain_control_group(self, parent, *, label_text, help_text):
+        label = wx.StaticText(parent, label=f"{label_text}:")
+        label.Wrap(250)
+        control = self._build_gain_control(parent, name=label_text, help_text=help_text)
+        help_label = wx.StaticText(parent, label=help_text)
+        help_label.Wrap(250)
+
+        box_sizer = wx.StaticBoxSizer(wx.StaticBox(parent, label=label_text), wx.VERTICAL)
+        box_sizer.Add(label, 0, wx.LEFT | wx.RIGHT | wx.TOP | wx.EXPAND, 6)
+        box_sizer.Add(control, 0, wx.ALL | wx.EXPAND, 6)
+        box_sizer.Add(help_label, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND, 6)
+        return box_sizer, control
+
+    def _announce_from_parent(self, message):
+        if not message:
+            return
+
+        parent = self.GetParent()
+        announce = getattr(parent, "_announce", None)
+        if callable(announce):
+            announce(message)
+
+    def _gain_control_message(self, control):
+        control_name = self._gain_control_names.get(control.GetId(), control.GetName() or "Controle de ganho")
+        try:
+            value = float(control.GetValue())
+        except (TypeError, ValueError):
+            value = 0.0
+        return f"{control_name}: {value:+.1f} dB."
 
     def _populate_controls(self, *, preset_name, preamp_db, band_gains_db):
         self.name_ctrl.SetValue(str(preset_name or "").strip())
@@ -179,4 +228,16 @@ class EqualizerPresetDialog(wx.Dialog):
                 self.Close()
             return
 
+        event.Skip()
+
+    def on_gain_control_focus(self, event):
+        control = event.GetEventObject()
+        if isinstance(control, wx.SpinCtrlDouble):
+            wx.CallAfter(self._announce_from_parent, self._gain_control_message(control))
+        event.Skip()
+
+    def on_gain_control_changed(self, event):
+        control = event.GetEventObject()
+        if isinstance(control, wx.SpinCtrlDouble):
+            self._announce_from_parent(self._gain_control_message(control))
         event.Skip()

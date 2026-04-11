@@ -1,5 +1,6 @@
 import wx
 
+from .accessibility import attach_named_accessible
 from .equalizer import format_frequency_label
 
 
@@ -33,7 +34,8 @@ class EqualizerTabPanel(wx.Panel):
             self,
             label=(
                 "Ajuste o equalizador da aba de mídia ativa. "
-                "Use os botões para criar, editar, duplicar ou excluir presets personalizados."
+                "Use os botões para criar presets, editar ou duplicar presets personalizados "
+                "e salvar uma cópia editável de presets do VLC."
             ),
         )
         intro_label.Wrap(620)
@@ -41,11 +43,17 @@ class EqualizerTabPanel(wx.Panel):
 
         context_box = wx.StaticBoxSizer(wx.StaticBox(self, label="Contexto"), wx.VERTICAL)
         self.target_tab_label = wx.StaticText(self, label="Aba alvo: nenhuma")
-        self.preset_description_label = wx.StaticText(self, label="")
-        self.preset_description_label.Wrap(600)
+        self.target_tab_label.SetName("Aba de mídia alvo do equalizador")
+        self.target_tab_label.SetHelpText("Informa qual aba de mídia receberá os ajustes do equalizador.")
         context_box.Add(self.target_tab_label, 0, wx.ALL | wx.EXPAND, 6)
-        context_box.Add(self.preset_description_label, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND, 6)
         root_sizer.Add(context_box, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND, 10)
+
+        attach_named_accessible(
+            self.target_tab_label,
+            name="Aba de mídia alvo do equalizador",
+            description="Informa qual aba de mídia receberá os ajustes do equalizador.",
+            value_provider=lambda: self.target_tab_label.GetLabel(),
+        )
 
         controls_box = wx.StaticBoxSizer(wx.StaticBox(self, label="Preset ativo"), wx.VERTICAL)
         self.enable_checkbox = wx.CheckBox(self, label="Ativar equalizador nesta aba")
@@ -59,11 +67,46 @@ class EqualizerTabPanel(wx.Panel):
         self.preset_choice.SetHelpText("Escolha o preset que será usado na aba de mídia ativa.")
         self.preset_choice.SetToolTip("Escolha o preset que será usado na aba de mídia ativa.")
 
+        preset_description_label = wx.StaticText(self, label="Descrição do preset:")
+        self.preset_description_ctrl = wx.TextCtrl(
+            self,
+            style=wx.TE_MULTILINE | wx.TE_READONLY,
+        )
+        self.preset_description_ctrl.SetMinSize((-1, 72))
+        self.preset_description_ctrl.SetName("Descrição do preset atual")
+        self.preset_description_ctrl.SetHelpText(
+            "Mostra a descrição do preset atualmente selecionado. Campo somente leitura."
+        )
+        self.preset_description_ctrl.SetToolTip(
+            "Mostra a descrição do preset atualmente selecionado. Campo somente leitura."
+        )
+
         button_sizer = wx.BoxSizer(wx.HORIZONTAL)
         self.new_button = wx.Button(self, label="Novo...")
         self.edit_button = wx.Button(self, label="Editar...")
         self.duplicate_button = wx.Button(self, label="Duplicar...")
         self.delete_button = wx.Button(self, label="Excluir")
+
+        self._configure_action_button(
+            self.new_button,
+            name="Novo preset do equalizador",
+            description="Cria um preset personalizado com base nos ajustes atuais.",
+        )
+        self._configure_action_button(
+            self.edit_button,
+            name="Editar preset do equalizador",
+            description="Edita o preset selecionado ou salva uma cópia se o preset for nativo do VLC.",
+        )
+        self._configure_action_button(
+            self.duplicate_button,
+            name="Duplicar preset do equalizador",
+            description="Cria uma cópia editável do preset selecionado.",
+        )
+        self._configure_action_button(
+            self.delete_button,
+            name="Excluir preset do equalizador",
+            description="Exclui o preset personalizado selecionado.",
+        )
 
         for button in (self.new_button, self.edit_button, self.duplicate_button, self.delete_button):
             button_sizer.Add(button, 0, wx.RIGHT, 8)
@@ -71,6 +114,8 @@ class EqualizerTabPanel(wx.Panel):
         controls_box.Add(self.enable_checkbox, 0, wx.ALL | wx.EXPAND, 6)
         controls_box.Add(preset_label, 0, wx.LEFT | wx.RIGHT | wx.TOP | wx.EXPAND, 6)
         controls_box.Add(self.preset_choice, 0, wx.ALL | wx.EXPAND, 6)
+        controls_box.Add(preset_description_label, 0, wx.LEFT | wx.RIGHT | wx.TOP | wx.EXPAND, 6)
+        controls_box.Add(self.preset_description_ctrl, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND, 6)
         controls_box.Add(button_sizer, 0, wx.ALL | wx.EXPAND, 6)
         root_sizer.Add(controls_box, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND, 10)
 
@@ -86,8 +131,17 @@ class EqualizerTabPanel(wx.Panel):
         values_grid.AddGrowableCol(1, 1)
         values_grid.Add(wx.StaticText(self, label="Pré-amplificação:"), 0, wx.ALIGN_CENTER_VERTICAL)
         self.preamp_value_label = wx.StaticText(self, label="0.0 dB")
+        self.preamp_value_label.SetName("Pré-amplificação atual do preset")
+        self.preamp_value_label.SetHelpText("Mostra o ganho geral do preset selecionado antes das bandas.")
         values_grid.Add(self.preamp_value_label, 0, wx.ALIGN_CENTER_VERTICAL)
         values_box.Add(values_grid, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND, 6)
+
+        attach_named_accessible(
+            self.preamp_value_label,
+            name="Pré-amplificação atual do preset",
+            description="Mostra o ganho geral do preset selecionado antes das bandas.",
+            value_provider=lambda: self.preamp_value_label.GetLabel(),
+        )
 
         self._values_grid = values_grid
         root_sizer.Add(values_box, 1, wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND, 10)
@@ -100,6 +154,60 @@ class EqualizerTabPanel(wx.Panel):
         self.edit_button.Bind(wx.EVT_BUTTON, lambda _event: self._on_edit_preset())
         self.duplicate_button.Bind(wx.EVT_BUTTON, lambda _event: self._on_duplicate_preset())
         self.delete_button.Bind(wx.EVT_BUTTON, lambda _event: self._on_delete_preset())
+
+    def _configure_action_button(self, button, *, name, description):
+        button.SetName(name)
+        button.SetHelpText(description)
+        button.SetToolTip(description)
+
+    def _update_action_buttons(self, selected_preset):
+        has_selection = selected_preset is not None
+        is_builtin = bool(has_selection and selected_preset.is_builtin)
+
+        if is_builtin:
+            self.edit_button.SetLabel("Salvar cópia...")
+            self._configure_action_button(
+                self.edit_button,
+                name="Salvar cópia do preset do equalizador",
+                description="Cria uma cópia editável do preset nativo do VLC selecionado.",
+            )
+        else:
+            self.edit_button.SetLabel("Editar...")
+            self._configure_action_button(
+                self.edit_button,
+                name="Editar preset do equalizador",
+                description="Edita o preset personalizado selecionado.",
+            )
+
+        self._configure_action_button(
+            self.duplicate_button,
+            name="Duplicar preset do equalizador",
+            description="Cria uma cópia editável do preset personalizado selecionado.",
+        )
+
+        self.edit_button.Enable(has_selection)
+        self.duplicate_button.Enable(bool(has_selection and not is_builtin))
+        self.delete_button.Enable(bool(has_selection and not is_builtin))
+
+    def _preset_description_text(self, selected_preset):
+        if selected_preset is None:
+            return "Nenhum preset selecionado."
+
+        description = str(getattr(selected_preset, "description", "") or "").strip()
+        if description:
+            return description
+
+        if selected_preset.is_builtin:
+            return "Preset nativo do VLC sem descrição adicional."
+
+        return "Preset personalizado sem descrição adicional."
+
+    def _preset_choice_help_text(self, selected_preset):
+        description = self._preset_description_text(selected_preset)
+        return (
+            "Escolha o preset que será usado na aba de mídia ativa. "
+            f"Descrição do preset atual: {description}"
+        )
 
     def update_view(self, *, target_tab_title, equalizer_enabled, presets, selected_preset_id, selected_preset, band_frequencies_hz):
         self._updating_controls = True
@@ -124,7 +232,12 @@ class EqualizerTabPanel(wx.Panel):
                 self.preset_choice.SetSelection(selection_index)
 
             self._refresh_value_rows(band_frequencies_hz)
-            self.preset_description_label.SetLabel(selected_preset.description if selected_preset else "")
+            preset_description = self._preset_description_text(selected_preset)
+            self.preset_description_ctrl.ChangeValue(preset_description)
+            self.preset_description_ctrl.SetInsertionPoint(0)
+            preset_choice_help_text = self._preset_choice_help_text(selected_preset)
+            self.preset_choice.SetHelpText(preset_choice_help_text)
+            self.preset_choice.SetToolTip(preset_choice_help_text)
             self.preamp_value_label.SetLabel(
                 f"{selected_preset.preamp_db:+.1f} dB" if selected_preset else "0.0 dB"
             )
@@ -137,10 +250,7 @@ class EqualizerTabPanel(wx.Panel):
                 for label in self._band_value_labels[len(selected_band_gains):]:
                     label.SetLabel("0.0 dB")
 
-            has_selection = selected_preset is not None
-            self.edit_button.Enable(has_selection)
-            self.duplicate_button.Enable(has_selection)
-            self.delete_button.Enable(bool(has_selection and not selected_preset.is_builtin))
+            self._update_action_buttons(selected_preset)
             self.Layout()
         finally:
             self._updating_controls = False
