@@ -113,7 +113,7 @@ class FrameUIMixin:
         if button_sizer is not None:
             ok_button = dialog.FindWindowById(wx.ID_OK)
             if ok_button is not None:
-                ok_button.SetLabel("Fechar")
+                ok_button.SetLabel("F&echar")
 
         root_sizer.Add(instructions, 1, wx.ALL | wx.EXPAND, 12)
         if button_sizer is not None:

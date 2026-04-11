@@ -12,6 +12,7 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ### Changed
 - O aplicativo passou a se chamar **KeyTune** na interface e na documentação principal, sem o sufixo técnico.
+- Inclusão de mnemônicos com `&` em botões e opções de Preferências, Equalizador, Ajuda rápida de atalhos e diálogos de atualização para melhorar a navegação por teclado.
 
 ### Fixed
 - Restauração do volume salvo ao abrir o app com sessão recuperada, aplicando corretamente o nível anterior já no início da reprodução.

@@ -38,8 +38,8 @@ class PreferencesDialog(wx.Dialog):
         root_sizer.Add(self.notebook, 1, wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND, 10)
 
         button_sizer = wx.StdDialogButtonSizer()
-        self.save_button = wx.Button(panel, wx.ID_OK, "Salvar")
-        self.cancel_button = wx.Button(panel, wx.ID_CANCEL, "Cancelar")
+        self.save_button = wx.Button(panel, wx.ID_OK, "&Salvar")
+        self.cancel_button = wx.Button(panel, wx.ID_CANCEL, "&Cancelar")
         self.save_button.SetDefault()
         button_sizer.AddButton(self.save_button)
         button_sizer.AddButton(self.cancel_button)
@@ -67,10 +67,10 @@ class PreferencesDialog(wx.Dialog):
         info_label.Wrap(520)
 
         general_box = wx.StaticBoxSizer(wx.StaticBox(page, label="Inicialização e sessão"), wx.VERTICAL)
-        self.restore_session_checkbox = wx.CheckBox(page, label="Restaurar sessão ao iniciar")
-        self.remember_window_size_checkbox = wx.CheckBox(page, label="Lembrar tamanho da janela")
-        self.remember_last_folder_checkbox = wx.CheckBox(page, label="Lembrar última pasta usada")
-        self.confirm_on_exit_checkbox = wx.CheckBox(page, label="Confirmar ao sair")
+        self.restore_session_checkbox = wx.CheckBox(page, label="&Restaurar sessão ao iniciar")
+        self.remember_window_size_checkbox = wx.CheckBox(page, label="Lembrar tamanho da &janela")
+        self.remember_last_folder_checkbox = wx.CheckBox(page, label="Lembrar última &pasta usada")
+        self.confirm_on_exit_checkbox = wx.CheckBox(page, label="Con&firmar ao sair")
 
         self._configure_checkbox(
             self.restore_session_checkbox,
@@ -123,7 +123,7 @@ class PreferencesDialog(wx.Dialog):
         info_label.Wrap(520)
 
         playback_box = wx.StaticBoxSizer(wx.StaticBox(page, label="Controles de reprodução"), wx.VERTICAL)
-        self.shuffle_new_playlists_checkbox = wx.CheckBox(page, label="Ativar embaralhamento em novas playlists")
+        self.shuffle_new_playlists_checkbox = wx.CheckBox(page, label="Ativar e&mbaralhamento em novas playlists")
         self._configure_checkbox(
             self.shuffle_new_playlists_checkbox,
             "Ativar embaralhamento em novas playlists",
@@ -178,7 +178,7 @@ class PreferencesDialog(wx.Dialog):
         info_label.Wrap(520)
 
         accessibility_box = wx.StaticBoxSizer(wx.StaticBox(page, label="Leitor de tela"), wx.VERTICAL)
-        self.announcements_enabled_checkbox = wx.CheckBox(page, label="Ativar anúncios de acessibilidade")
+        self.announcements_enabled_checkbox = wx.CheckBox(page, label="Ativar a&núncios de acessibilidade")
         self._configure_checkbox(
             self.announcements_enabled_checkbox,
             "Ativar anúncios de acessibilidade",

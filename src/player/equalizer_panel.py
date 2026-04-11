@@ -56,7 +56,7 @@ class EqualizerTabPanel(wx.Panel):
         )
 
         controls_box = wx.StaticBoxSizer(wx.StaticBox(self, label="Preset ativo"), wx.VERTICAL)
-        self.enable_checkbox = wx.CheckBox(self, label="Ativar equalizador nesta aba")
+        self.enable_checkbox = wx.CheckBox(self, label="Ativar &equalizador nesta aba")
         self.enable_checkbox.SetName("Ativar equalizador nesta aba")
         self.enable_checkbox.SetHelpText("Liga ou desliga o equalizador apenas para a aba de mídia ativa.")
         self.enable_checkbox.SetToolTip("Liga ou desliga o equalizador apenas para a aba de mídia ativa.")
@@ -82,10 +82,10 @@ class EqualizerTabPanel(wx.Panel):
         )
 
         button_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        self.new_button = wx.Button(self, label="Novo...")
-        self.edit_button = wx.Button(self, label="Editar...")
-        self.duplicate_button = wx.Button(self, label="Duplicar...")
-        self.delete_button = wx.Button(self, label="Excluir")
+        self.new_button = wx.Button(self, label="&Novo...")
+        self.edit_button = wx.Button(self, label="&Editar...")
+        self.duplicate_button = wx.Button(self, label="&Duplicar...")
+        self.delete_button = wx.Button(self, label="E&xcluir")
 
         self._configure_action_button(
             self.new_button,
@@ -165,14 +165,14 @@ class EqualizerTabPanel(wx.Panel):
         is_builtin = bool(has_selection and selected_preset.is_builtin)
 
         if is_builtin:
-            self.edit_button.SetLabel("Salvar cópia...")
+            self.edit_button.SetLabel("&Salvar cópia...")
             self._configure_action_button(
                 self.edit_button,
                 name="Salvar cópia do preset do equalizador",
                 description="Cria uma cópia editável do preset nativo do VLC selecionado.",
             )
         else:
-            self.edit_button.SetLabel("Editar...")
+            self.edit_button.SetLabel("&Editar...")
             self._configure_action_button(
                 self.edit_button,
                 name="Editar preset do equalizador",

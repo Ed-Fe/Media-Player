@@ -61,8 +61,8 @@ class UpdateAvailableDialog(wx.Dialog):
             root_sizer.Add(warning_label, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND, 10)
 
         button_sizer = wx.StdDialogButtonSizer()
-        self.download_button = wx.Button(panel, wx.ID_OK, "Baixar e instalar")
-        self.cancel_button = wx.Button(panel, wx.ID_CANCEL, "Agora não")
+        self.download_button = wx.Button(panel, wx.ID_OK, "&Baixar e instalar")
+        self.cancel_button = wx.Button(panel, wx.ID_CANCEL, "A&gora não")
         self.download_button.SetDefault()
         button_sizer.AddButton(self.download_button)
         button_sizer.AddButton(self.cancel_button)
@@ -126,7 +126,7 @@ class UpdateDownloadDialog(wx.Dialog):
         root_sizer.Add(self.detail_label, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND, 10)
 
         button_sizer = wx.StdDialogButtonSizer()
-        self.cancel_button = wx.Button(panel, wx.ID_CANCEL, "Cancelar")
+        self.cancel_button = wx.Button(panel, wx.ID_CANCEL, "&Cancelar")
         button_sizer.AddButton(self.cancel_button)
         button_sizer.Realize()
         root_sizer.Add(button_sizer, 0, wx.ALL | wx.ALIGN_RIGHT, 10)

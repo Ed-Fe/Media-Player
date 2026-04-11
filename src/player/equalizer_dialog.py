@@ -94,8 +94,8 @@ class EqualizerPresetDialog(wx.Dialog):
         root_sizer.Add(bands_box, 1, wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND, 10)
 
         button_sizer = wx.StdDialogButtonSizer()
-        self.save_button = wx.Button(panel, wx.ID_OK, "Salvar")
-        self.cancel_button = wx.Button(panel, wx.ID_CANCEL, "Cancelar")
+        self.save_button = wx.Button(panel, wx.ID_OK, "&Salvar")
+        self.cancel_button = wx.Button(panel, wx.ID_CANCEL, "&Cancelar")
         self.save_button.SetName("Salvar preset do equalizador")
         self.save_button.SetHelpText("Salva o preset com o nome e os ajustes informados.")
         self.save_button.SetToolTip("Salva o preset com o nome e os ajustes informados.")
