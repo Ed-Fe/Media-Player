@@ -3,6 +3,8 @@ import os
 import wx
 
 from .constants import PLAYLIST_WILDCARD, SUPPORTED_MEDIA_EXTENSIONS
+from .equalizer_panel import EqualizerTabPanel
+from .playlists import ScreenTabState
 from .playlist_io import playlist_display_name, save_playlist
 from .preferences_dialog import PreferencesDialog
 
@@ -266,16 +268,68 @@ class FrameCommandMixin:
     def on_video_panel_focus(self, _event):
         wx.CallAfter(self.SetFocus)
 
+    def _equalizer_page_is_active(self):
+        if not hasattr(self, "notebook"):
+            return False
+
+        current_page = self.notebook.GetCurrentPage()
+        return isinstance(current_page, EqualizerTabPanel)
+
+    def _window_is_descendant_of(self, window, ancestor):
+        current_window = window
+        while isinstance(current_window, wx.Window):
+            if current_window == ancestor:
+                return True
+            current_window = current_window.GetParent()
+
+        return False
+
+    def _equalizer_page_has_focus(self, event):
+        if not self._equalizer_page_is_active():
+            return False
+
+        equalizer_panel = self.notebook.GetCurrentPage()
+        focused_window = wx.Window.FindFocus()
+        if self._window_is_descendant_of(focused_window, equalizer_panel):
+            return True
+
+        event_window = event.GetEventObject()
+        if isinstance(event_window, wx.Window) and self._window_is_descendant_of(event_window, equalizer_panel):
+            return True
+
+        return False
+
+    def _should_defer_key_to_equalizer_controls(self, event):
+        if not self._equalizer_page_is_active():
+            return False
+
+        if event.ControlDown():
+            return False
+
+        if event.GetKeyCode() == wx.WXK_F6:
+            return False
+
+        return self._equalizer_page_has_focus(event) or self._equalizer_page_is_active()
+
     def on_key_down(self, event):
         key_code = event.GetKeyCode()
         browser = self._get_browser_panel()
+        current_tab = self._get_tab_state()
 
         if key_code == wx.WXK_F6:
             self._toggle_navigation_mode()
             return
 
+        if key_code == wx.WXK_ESCAPE and isinstance(current_tab, ScreenTabState):
+            self._close_current_tab()
+            return
+
         if event.ControlDown() and key_code == wx.WXK_TAB:
             self._cycle_tabs(-1 if event.ShiftDown() else 1)
+            return
+
+        if self._should_defer_key_to_equalizer_controls(event):
+            event.Skip()
             return
 
         if browser and browser.is_item_navigation_active() and not event.ControlDown() and not event.AltDown():
