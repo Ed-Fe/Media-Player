@@ -151,3 +151,7 @@ python -m compileall src
 - Multi-selection in the playlist browser
 - Batch reordering support
 - More playback and library management features
+
+## Changelog
+
+- See `CHANGELOG.md` for version history and notable changes.
