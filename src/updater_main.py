@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import ctypes
+import threading
 import shutil
 import subprocess
 import sys
@@ -10,6 +11,8 @@ import time
 import zipfile
 from datetime import datetime
 from pathlib import Path
+
+import wx
 
 
 LOG_DIRECTORY = Path(tempfile.gettempdir()) / "KeyTuneUpdater"
@@ -20,11 +23,131 @@ WAIT_FAILED = 0xFFFFFFFF
 SYNCHRONIZE = 0x00100000
 
 
+class UpdateProgressDialog(wx.Dialog):
+    def __init__(self, parent=None):
+        super().__init__(
+            parent,
+            title="Atualizando KeyTune",
+            style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER,
+        )
+
+        self.succeeded = False
+        self.error_message = ""
+        self._finished = False
+        self._allow_close = False
+        self._pulse_timer = wx.Timer(self)
+
+        self.Bind(wx.EVT_TIMER, self._on_pulse, self._pulse_timer)
+        self.Bind(wx.EVT_CLOSE, self.on_close)
+
+        panel = wx.Panel(self)
+        root_sizer = wx.BoxSizer(wx.VERTICAL)
+
+        self.status_label = wx.StaticText(panel, label="Preparando a atualização...")
+        self.status_label.Wrap(460)
+        self.status_label.SetName("Status da atualização")
+        self.status_label.SetHelpText("Mostra a etapa atual do instalador da atualização.")
+
+        self.detail_label = wx.StaticText(
+            panel,
+            label="Aguarde enquanto o atualizador organiza os arquivos.",
+        )
+        self.detail_label.Wrap(460)
+        self.detail_label.SetName("Detalhes da atualização")
+        self.detail_label.SetHelpText("Mostra detalhes sobre o passo atual da atualização.")
+
+        self.progress_gauge = wx.Gauge(panel, range=100, style=wx.GA_HORIZONTAL | wx.GA_SMOOTH)
+        self.progress_gauge.SetName("Progresso da atualização")
+        self.progress_gauge.SetHelpText("Mostra que a atualização ainda está em andamento.")
+
+        root_sizer.Add(self.status_label, 0, wx.ALL | wx.EXPAND, 10)
+        root_sizer.Add(self.detail_label, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND, 10)
+        root_sizer.Add(self.progress_gauge, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND, 10)
+
+        button_sizer = wx.StdDialogButtonSizer()
+        self.close_button = wx.Button(panel, wx.ID_CLOSE, "&Fechar")
+        self.close_button.Disable()
+        self.close_button.Bind(wx.EVT_BUTTON, self.on_close_button)
+        button_sizer.AddButton(self.close_button)
+        button_sizer.Realize()
+        root_sizer.Add(button_sizer, 0, wx.ALL | wx.ALIGN_RIGHT, 10)
+
+        panel.SetSizer(root_sizer)
+
+        frame_sizer = wx.BoxSizer(wx.VERTICAL)
+        frame_sizer.Add(panel, 1, wx.EXPAND)
+        self.SetSizerAndFit(frame_sizer)
+        self.SetMinSize((520, 220))
+        self.CentreOnScreen()
+
+        self._pulse_timer.Start(120)
+
+    def _on_pulse(self, _event):
+        if not self._finished:
+            self.progress_gauge.Pulse()
+
+    def update_status(self, title: str, detail: str = ""):
+        self.status_label.SetLabel(title)
+        self.detail_label.SetLabel(detail or " ")
+        self.status_label.Wrap(460)
+        self.detail_label.Wrap(460)
+        self.Layout()
+
+    def finish_successfully(self):
+        if self._finished:
+            return
+
+        self._finished = True
+        self.succeeded = True
+        self._pulse_timer.Stop()
+        self.progress_gauge.SetValue(self.progress_gauge.GetRange())
+        self.update_status(
+            "Atualização concluída.",
+            "O aplicativo atualizado será iniciado em instantes.",
+        )
+        self.close_button.Enable()
+        wx.CallLater(900, self._close_after_success)
+
+    def finish_with_error(self, error_message: str):
+        if self._finished:
+            return
+
+        self._finished = True
+        self.error_message = error_message
+        self._allow_close = True
+        self._pulse_timer.Stop()
+        self.update_status(
+            "A atualização não pôde ser concluída.",
+            error_message,
+        )
+        self.close_button.Enable()
+        self.close_button.SetFocus()
+
+    def _close_after_success(self):
+        self._allow_close = True
+        self.Close()
+
+    def on_close_button(self, _event):
+        self.Close()
+
+    def on_close(self, event):
+        if not self._allow_close:
+            event.Veto()
+            return
+
+        event.Skip()
+
+
 def main() -> int:
     args = parse_args()
     log_message("Iniciando atualizador externo.")
     log_message(f"Pasta do aplicativo: {args.app_dir}")
     log_message(f"Pacote recebido: {args.package}")
+
+    try:
+        return run_interactive_update(args)
+    except Exception as exc:
+        log_message(f"Falha ao iniciar a janela do atualizador: {exc}")
 
     try:
         run_update(args)
@@ -40,6 +163,40 @@ def main() -> int:
     return 0
 
 
+def run_interactive_update(args) -> int:
+    app = wx.App(False)
+    dialog = UpdateProgressDialog(None)
+
+    worker_thread = threading.Thread(
+        target=_update_worker,
+        args=(args, dialog),
+        daemon=True,
+    )
+    worker_thread.start()
+
+    dialog.Show()
+    app.MainLoop()
+
+    if dialog.error_message:
+        return 1
+    return 0
+
+
+def _update_worker(args, dialog: UpdateProgressDialog):
+    try:
+        run_update(
+            args,
+            status_callback=lambda title, detail="": wx.CallAfter(dialog.update_status, title, detail),
+        )
+    except Exception as exc:
+        log_message(f"Falha durante a atualização: {exc}")
+        wx.CallAfter(dialog.finish_with_error, str(exc))
+        return
+
+    log_message("Atualização concluída com sucesso.")
+    wx.CallAfter(dialog.finish_successfully)
+
+
 def parse_args():
     parser = argparse.ArgumentParser(description="Aplica uma atualização do KeyTune a partir de um arquivo ZIP.")
     parser.add_argument("--parent-pid", type=int, required=True)
@@ -49,7 +206,7 @@ def parse_args():
     return parser.parse_args()
 
 
-def run_update(args):
+def run_update(args, *, status_callback=None):
     app_dir = Path(args.app_dir).resolve()
     package_path = Path(args.package).resolve()
     restart_executable = str(args.restart_executable).strip()
@@ -58,30 +215,54 @@ def run_update(args):
     if not package_path.exists() or not package_path.is_file():
         raise FileNotFoundError(f"Pacote de atualização não encontrado: {package_path}")
 
-    log_message("Aguardando o encerramento do processo principal.")
+    _report_status(
+        status_callback,
+        "Aguardando o encerramento do aplicativo principal.",
+        "Feche o player para continuar.",
+    )
     wait_for_process_exit(args.parent_pid, timeout_seconds=120)
 
-    working_directory = Path(tempfile.mkdtemp(prefix="mediaplayer-updater-job-"))
+    working_directory = _create_working_directory(app_dir)
     extract_directory = working_directory / "extract"
     backup_directory = working_directory / "backup"
 
-    log_message(f"Extraindo atualização em: {extract_directory}")
+    _report_status(
+        status_callback,
+        "Extraindo a atualização.",
+        f"Descompactando {package_path.name}.",
+    )
     extract_release_archive(package_path, extract_directory)
     payload_root = locate_payload_root(extract_directory)
 
-    log_message(f"Criando backup da instalação atual em: {backup_directory}")
+    _report_status(
+        status_callback,
+        "Salvando a instalação atual.",
+        "Movendo a versão anterior para uma pasta de segurança.",
+    )
     backup_installation(app_dir, backup_directory)
 
     try:
-        log_message("Copiando nova versão para a pasta do aplicativo.")
+        _report_status(
+            status_callback,
+            "Aplicando a nova versão.",
+            f"Movendo {payload_root.name} para a pasta do aplicativo.",
+        )
         replace_installation(app_dir, payload_root)
     except Exception:
-        log_message("Falha ao copiar a nova versão. Restaurando backup.")
+        _report_status(
+            status_callback,
+            "Falha ao aplicar a nova versão.",
+            "Restaurando a instalação anterior.",
+        )
         restore_installation(app_dir, backup_directory)
         raise
 
     restart_path = app_dir / restart_executable
-    log_message(f"Reiniciando aplicativo por: {restart_path}")
+    _report_status(
+        status_callback,
+        "Finalizando a atualização.",
+        f"Reiniciando por {restart_path.name}.",
+    )
     restart_application(restart_path)
 
 
@@ -136,36 +317,40 @@ def locate_payload_root(extract_directory: Path) -> Path:
 def backup_installation(source_directory: Path, backup_directory: Path):
     if backup_directory.exists():
         shutil.rmtree(backup_directory, ignore_errors=True)
-    backup_directory.mkdir(parents=True, exist_ok=True)
-    copy_directory_contents(source_directory, backup_directory)
+    backup_directory.parent.mkdir(parents=True, exist_ok=True)
+    shutil.move(str(source_directory), str(backup_directory))
 
 
 def replace_installation(target_directory: Path, payload_root: Path):
-    clear_directory(target_directory)
-    copy_directory_contents(payload_root, target_directory)
+    remove_path(target_directory)
+    shutil.move(str(payload_root), str(target_directory))
 
 
 def restore_installation(target_directory: Path, backup_directory: Path):
-    clear_directory(target_directory)
-    copy_directory_contents(backup_directory, target_directory)
+    remove_path(target_directory)
+    shutil.move(str(backup_directory), str(target_directory))
 
 
-def clear_directory(directory: Path):
-    for child in directory.iterdir():
-        if child.is_dir():
-            shutil.rmtree(child, ignore_errors=False)
-        else:
-            child.unlink(missing_ok=True)
+def remove_path(path: Path):
+    if not path.exists():
+        return
+
+    if path.is_dir() and not path.is_symlink():
+        shutil.rmtree(path, ignore_errors=False)
+        return
+
+    path.unlink(missing_ok=True)
 
 
-def copy_directory_contents(source_directory: Path, target_directory: Path):
-    target_directory.mkdir(parents=True, exist_ok=True)
-    for child in source_directory.iterdir():
-        destination = target_directory / child.name
-        if child.is_dir():
-            shutil.copytree(child, destination, dirs_exist_ok=True)
-        else:
-            shutil.copy2(child, destination)
+def _create_working_directory(app_dir: Path) -> Path:
+    preferred_parent = app_dir.parent
+    try:
+        return Path(tempfile.mkdtemp(prefix="mediaplayer-updater-job-", dir=str(preferred_parent)))
+    except OSError as exc:
+        log_message(
+            f"Não foi possível criar a área temporária ao lado da instalação: {exc}. Usando a pasta temporária do sistema."
+        )
+        return Path(tempfile.mkdtemp(prefix="mediaplayer-updater-job-"))
 
 
 def restart_application(executable_path: Path):
@@ -198,6 +383,13 @@ def show_error_message(message: str):
     except Exception:
         print(message, file=sys.stderr)
         time.sleep(5)
+
+
+def _report_status(status_callback, title: str, detail: str = ""):
+    message = title if not detail else f"{title} {detail}"
+    log_message(message)
+    if status_callback is not None:
+        status_callback(title, detail)
 
 
 if __name__ == "__main__":
