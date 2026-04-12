@@ -41,16 +41,7 @@ def folder_display_name(folder_path):
     return folder_name or normalized_path
 
 
-def discover_media_files(folder_path):
-    files = []
-    for item in sorted(os.listdir(folder_path), key=str.lower):
-        full_path = os.path.join(folder_path, item)
-        if os.path.isfile(full_path) and is_supported_media(item):
-            files.append(full_path)
-    return files
-
-
-def discover_folder_entries(folder_path):
+def scan_folder_contents(folder_path):
     normalized_folder_path = os.path.abspath(os.path.normpath(folder_path))
     entries = []
 
@@ -66,27 +57,42 @@ def discover_folder_entries(folder_path):
 
     directories = []
     files = []
-    for item in sorted(os.listdir(normalized_folder_path), key=str.lower):
-        full_path = os.path.join(normalized_folder_path, item)
-        if os.path.isdir(full_path):
+    media_files = []
+
+    with os.scandir(normalized_folder_path) as folder_entries:
+        sorted_entries = sorted(folder_entries, key=lambda entry: entry.name.lower())
+
+    for entry in sorted_entries:
+        if entry.is_dir(follow_symlinks=False):
             directories.append(
                 FolderBrowserEntry(
-                    path=full_path,
-                    label=item,
+                    path=entry.path,
+                    label=entry.name,
                     entry_type=FOLDER_ENTRY_DIRECTORY,
                 )
             )
             continue
 
-        if os.path.isfile(full_path) and is_supported_media(item):
+        if entry.is_file(follow_symlinks=False) and is_supported_media(entry.name):
             files.append(
                 FolderBrowserEntry(
-                    path=full_path,
-                    label=item,
+                    path=entry.path,
+                    label=entry.name,
                     entry_type=FOLDER_ENTRY_FILE,
                 )
             )
+            media_files.append(entry.path)
 
     entries.extend(directories)
     entries.extend(files)
+    return entries, media_files
+
+
+def discover_media_files(folder_path):
+    _entries, media_files = scan_folder_contents(folder_path)
+    return media_files
+
+
+def discover_folder_entries(folder_path):
+    entries, _media_files = scan_folder_contents(folder_path)
     return entries

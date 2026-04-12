@@ -165,6 +165,9 @@ class FrameCommandMixin:
     def on_close_current_media(self, _event):
         self._close_current_media()
 
+    def on_close_current_tab(self, _event):
+        self._close_current_tab()
+
     def on_toggle_playlist_browser(self, _event=None):
         self._toggle_navigation_mode()
 
@@ -411,6 +414,10 @@ class FrameCommandMixin:
             self.on_open_preferences(None)
             return
 
+        if event.ControlDown() and event.ShiftDown() and key_code in (ord("W"), ord("w")):
+            self.on_close_current_tab(None)
+            return
+
         if event.ControlDown() and key_code in (ord("W"), ord("w")):
             self._close_current_media()
             return
@@ -480,6 +487,7 @@ class FrameCommandMixin:
             self.progress_timer.Stop()
         self._dispose_equalizer_ui_cache()
         self._save_session()
+        self._shutdown_library_loader()
         self._shutdown_player_backend()
         self.player.stop()
         self.announcer.close()

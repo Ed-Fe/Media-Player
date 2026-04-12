@@ -71,6 +71,10 @@ class ScreenTabState:
 class PlaylistState:
     title: str
     items: list[str] = field(default_factory=list)
+    item_index_map: dict[str, int] = field(default_factory=dict)
+    is_loading: bool = False
+    loading_message: str | None = None
+    library_request_serial: int = 0
     current_index: int = -1
     current_media_path: str | None = None
     last_position_ms: int = 0
@@ -85,7 +89,11 @@ class PlaylistState:
     folder_current_path: str | None = None
     folder_selected_path: str | None = None
     folder_entries: list = field(default_factory=list)
+    folder_entry_index_map: dict[str, int] = field(default_factory=dict)
+    folder_entries_loaded: bool = False
+    folder_entries_revision: int = 0
     browser_item_labels: list[str] = field(default_factory=list)
+    items_revision: int = 0
     equalizer_enabled: bool = False
     equalizer_preset_id: str = DEFAULT_EQUALIZER_PRESET_ID
 
@@ -106,8 +114,12 @@ class PlaylistState:
         return len(self.items)
 
     def clear(self):
+        self.is_loading = False
+        self.loading_message = None
         self.items = []
+        self.item_index_map = {}
         self.browser_item_labels = []
+        self.items_revision += 1
         self.current_index = -1
         self.current_media_path = None
         self.last_position_ms = 0
@@ -115,12 +127,58 @@ class PlaylistState:
         self.playback_order = []
         self.playback_order_position = 0
 
+    def _apply_prepared_items(self, items, item_index_map, browser_item_labels):
+        self.items = items if isinstance(items, list) else list(items)
+        self.item_index_map = dict(item_index_map or {})
+        self.browser_item_labels = list(browser_item_labels or [])
+        self.items_revision += 1
+
     def refresh_browser_item_labels(self):
+        self.item_index_map = {item: index for index, item in enumerate(self.items)}
         self.browser_item_labels = [os.path.basename(item) or item for item in self.items]
+        self.items_revision += 1
+
+    def contains_item(self, media_path):
+        return media_path in self.item_index_map
+
+    def index_of_item(self, media_path):
+        return self.item_index_map.get(media_path)
+
+    def begin_library_load(self, message):
+        self.is_loading = True
+        self.loading_message = str(message or "").strip() or None
+
+    def finish_library_load(self):
+        self.is_loading = False
+        self.loading_message = None
 
     def set_items(self, items, start_index=0, auto_select=True):
-        self.items = list(items)
-        self.refresh_browser_item_labels()
+        normalized_items = list(items)
+        self._apply_prepared_items(
+            normalized_items,
+            {item: index for index, item in enumerate(normalized_items)},
+            [os.path.basename(item) or item for item in normalized_items],
+        )
+        if not self.items:
+            self.current_index = -1
+            self.current_media_path = None
+            self.last_position_ms = 0
+            self.was_playing = False
+            self.playback_order = []
+            self.playback_order_position = 0
+            return
+
+        if auto_select:
+            self.select_index(start_index)
+        else:
+            self.current_index = -1
+            self.current_media_path = None
+            self.last_position_ms = 0
+            self.was_playing = False
+            self.reset_playback_order(preferred_index=0)
+
+    def set_items_prepared(self, items, item_index_map, browser_item_labels, start_index=0, auto_select=True):
+        self._apply_prepared_items(items, item_index_map, browser_item_labels)
         if not self.items:
             self.current_index = -1
             self.current_media_path = None
@@ -149,6 +207,9 @@ class PlaylistState:
         self.folder_current_path = normalized_current_path
         self.folder_selected_path = str(selected_path or "").strip() or None
         self.folder_entries = []
+        self.folder_entry_index_map = {}
+        self.folder_entries_loaded = False
+        self.folder_entries_revision += 1
 
     def clear_folder_location(self):
         self.tab_type = TAB_TYPE_PLAYLIST
@@ -156,12 +217,19 @@ class PlaylistState:
         self.folder_current_path = None
         self.folder_selected_path = None
         self.folder_entries = []
+        self.folder_entry_index_map = {}
+        self.folder_entries_loaded = False
+        self.folder_entries_revision += 1
 
-    def set_folder_entries(self, entries):
-        self.folder_entries = list(entries)
+    def set_folder_entries(self, entries, entry_index_map=None):
+        self.folder_entries = entries if isinstance(entries, list) else list(entries)
+        self.folder_entry_index_map = dict(entry_index_map or {})
+        self.folder_entries_loaded = True
+        self.folder_entries_revision += 1
 
     def set_current_media_path(self, media_path):
-        if not self.items or media_path not in self.items:
+        media_index = self.index_of_item(media_path)
+        if not self.items or media_index is None:
             self.current_index = -1
             self.current_media_path = None
             self.last_position_ms = 0
@@ -169,7 +237,7 @@ class PlaylistState:
             self.sync_playback_order()
             return None
 
-        return self.select_index(self.items.index(media_path))
+        return self.select_index(media_index)
 
     def select_index(self, index, reset_playback_order=True):
         if not self.items:
@@ -309,6 +377,7 @@ class PlaylistState:
         title = str(data.get("title") or build_playlist_title(items))
         state = cls(title=title)
         state.items = items
+        state.refresh_browser_item_labels()
         state.source_path = data.get("source_path")
         state.shuffle_enabled = bool(data.get("shuffle_enabled", False))
         tab_type = data.get("tab_type", TAB_TYPE_PLAYLIST)

@@ -31,7 +31,8 @@ class FrameUIMixin:
             "Ctrl+Shift+P — Abrir playlist\n"
             "Ctrl+Shift+S — Salvar playlist atual\n"
             "Ctrl+T — Nova playlist\n"
-            "Ctrl+W — Fechar mídia atual ou aba vazia\n\n"
+            "Ctrl+W — Fechar mídia atual ou aba vazia\n"
+            "Ctrl+Shift+W — Fechar aba ou playlist atual\n\n"
             "Reprodução\n"
             "Espaço — Play/Pause\n"
             "Seta esquerda / direita — Voltar ou avançar no arquivo\n"
@@ -48,6 +49,7 @@ class FrameUIMixin:
             "Enter — Tocar ou abrir o item selecionado no navegador\n"
             "Delete — Remover item da playlist\n"
             "Backspace — Voltar de pasta no navegador\n"
+            "Digite letras ou números — Ir rapidamente para itens com esse início\n"
             "Ctrl+Tab / Ctrl+Shift+Tab — Próxima ou aba anterior\n"
             "F1 — Mostrar esta ajuda"
         )
@@ -158,6 +160,7 @@ class FrameUIMixin:
         self.menu_stop_id = wx.NewIdRef()
         self.menu_next_track_id = wx.NewIdRef()
         self.menu_close_media_id = wx.NewIdRef()
+        self.menu_close_tab_id = wx.NewIdRef()
         self.menu_open_equalizer_id = wx.NewIdRef()
         self.menu_toggle_shuffle_id = wx.NewIdRef()
         self.menu_cycle_repeat_id = wx.NewIdRef()
@@ -177,7 +180,8 @@ class FrameUIMixin:
         playback_menu.Append(self.menu_announce_volume_id, "Anunciar &Volume (V)")
         playback_menu.Append(self.menu_announce_status_id, "Anunciar &Status (S)")
         playback_menu.AppendSeparator()
-        playback_menu.Append(self.menu_close_media_id, "Fechar Mí&dia / Aba\tCtrl+W")
+        playback_menu.Append(self.menu_close_media_id, "Fechar Mí&dia / Aba vazia\tCtrl+W")
+        playback_menu.Append(self.menu_close_tab_id, "Fechar A&ba / Playlist\tCtrl+Shift+W")
 
         view_menu = wx.Menu()
         self.menu_playlist_browser_id = wx.NewIdRef()
@@ -188,6 +192,8 @@ class FrameUIMixin:
         self.menu_previous_tab_id = wx.NewIdRef()
         tabs_menu.Append(self.menu_next_tab_id, "Próxima A&ba\tCtrl+Tab")
         tabs_menu.Append(self.menu_previous_tab_id, "Aba A&nterior\tCtrl+Shift+Tab")
+        tabs_menu.AppendSeparator()
+        tabs_menu.Append(self.menu_close_tab_id, "Fechar A&ba atual\tCtrl+Shift+W")
 
         settings_menu = wx.Menu()
         self.menu_check_updates_id = wx.NewIdRef()
@@ -291,6 +297,7 @@ class FrameUIMixin:
         self.Bind(wx.EVT_MENU, self.on_announce_volume, id=self.menu_announce_volume_id)
         self.Bind(wx.EVT_MENU, self.on_announce_status, id=self.menu_announce_status_id)
         self.Bind(wx.EVT_MENU, self.on_close_current_media, id=self.menu_close_media_id)
+        self.Bind(wx.EVT_MENU, self.on_close_current_tab, id=self.menu_close_tab_id)
         self.Bind(wx.EVT_MENU, self.on_toggle_playlist_browser, id=self.menu_playlist_browser_id)
         self.Bind(wx.EVT_MENU, self.on_next_tab, id=self.menu_next_tab_id)
         self.Bind(wx.EVT_MENU, self.on_previous_tab, id=self.menu_previous_tab_id)

@@ -1,4 +1,6 @@
+import queue
 import os
+import threading
 
 import wx
 
@@ -12,7 +14,7 @@ from .constants import (
     REPEAT_ONE,
     RESTORE_DELAY_MS,
 )
-from .media import discover_folder_entries, discover_media_files, folder_display_name
+from .media import discover_folder_entries, folder_display_name, scan_folder_contents
 from .playlist_io import load_playlist, playlist_display_name
 from .playlists import (
     PlaylistState,
@@ -24,6 +26,302 @@ from .playlists import (
 
 
 class FrameLibraryMixin:
+    def _create_library_loader(self):
+        self._library_request_serial = 0
+        self._library_queue = queue.Queue()
+        self._library_stop_event = threading.Event()
+        self._library_worker = threading.Thread(target=self._library_worker_loop, daemon=True)
+        self._library_worker.start()
+
+    def _shutdown_library_loader(self):
+        stop_event = getattr(self, "_library_stop_event", None)
+        if stop_event is not None:
+            stop_event.set()
+
+        if hasattr(self, "_library_queue"):
+            self._library_queue.put({"kind": "shutdown"})
+
+        if hasattr(self, "_library_worker") and self._library_worker.is_alive():
+            self._library_worker.join(timeout=1.0)
+
+    def _next_library_request_serial(self):
+        self._library_request_serial += 1
+        return self._library_request_serial
+
+    def _resolve_playlist_state_index(self, state):
+        for index, candidate in enumerate(self.playlists):
+            if candidate is state:
+                return index
+        return wx.NOT_FOUND
+
+    def _is_current_playlist_state(self, state):
+        current_index = self._get_current_tab_index()
+        return self._get_tab_state(current_index) is state
+
+    def _prepare_library_target_tab(self):
+        current_index = self.notebook.GetSelection()
+        current_tab = self._get_tab_state(current_index)
+        state = current_tab if isinstance(current_tab, PlaylistState) else self._get_active_playlist_state()
+
+        if isinstance(current_tab, PlaylistState) and current_tab.is_empty:
+            return current_tab, current_index
+
+        if state and state.is_empty:
+            return state, self._get_active_playlist_index()
+
+        target_index = self._create_empty_playlist_tab(select=False)
+        return self._get_playlist_state(target_index), target_index
+
+    def _queue_library_request(self, request):
+        state = request.get("state")
+        if not isinstance(state, PlaylistState):
+            return None
+
+        request_serial = self._next_library_request_serial()
+        request["serial"] = request_serial
+        state.library_request_serial = request_serial
+        self._library_queue.put(request)
+        return request_serial
+
+    def _store_latest_library_request(self, pending_requests, request):
+        state = request.get("state")
+        request_key = id(state) if state is not None else (request.get("kind"), request.get("serial"))
+        pending_requests[request_key] = request
+
+    def _library_worker_loop(self):
+        while True:
+            request = self._library_queue.get()
+            if request.get("kind") == "shutdown" or self._library_stop_event.is_set():
+                return
+
+            pending_requests = {}
+            self._store_latest_library_request(pending_requests, request)
+            while True:
+                try:
+                    newer_request = self._library_queue.get_nowait()
+                except queue.Empty:
+                    break
+
+                if newer_request.get("kind") == "shutdown" or self._library_stop_event.is_set():
+                    return
+
+                self._store_latest_library_request(pending_requests, newer_request)
+
+            for current_request in pending_requests.values():
+                if self._library_stop_event.is_set():
+                    return
+                self._process_library_request(current_request)
+
+    def _process_library_request(self, request):
+        kind = request.get("kind")
+
+        if kind == "folder":
+            try:
+                folder_entries, media_files = scan_folder_contents(request["folder_path"])
+                media_item_index_map = {path: index for index, path in enumerate(media_files)}
+                media_browser_labels = [os.path.basename(path) or path for path in media_files]
+                folder_entry_index_map = {
+                    os.path.normcase(os.path.normpath(getattr(entry, "path", ""))): index
+                    for index, entry in enumerate(folder_entries)
+                    if getattr(entry, "path", None)
+                }
+                error_message = ""
+            except OSError as exc:
+                folder_entries = []
+                media_files = []
+                media_item_index_map = {}
+                media_browser_labels = []
+                folder_entry_index_map = {}
+                error_message = str(exc)
+            except Exception as exc:
+                folder_entries = []
+                media_files = []
+                media_item_index_map = {}
+                media_browser_labels = []
+                folder_entry_index_map = {}
+                error_message = f"Falha inesperada ao carregar a pasta: {exc}."
+
+            if self._library_stop_event.is_set():
+                return
+
+            wx.CallAfter(
+                self._finish_folder_load_request,
+                request,
+                folder_entries,
+                folder_entry_index_map,
+                media_files,
+                media_item_index_map,
+                media_browser_labels,
+                error_message,
+            )
+            return
+
+        if kind == "playlist":
+            try:
+                items = load_playlist(request["playlist_path"])
+                item_index_map = {path: index for index, path in enumerate(items)}
+                browser_item_labels = [os.path.basename(path) or path for path in items]
+                error_message = ""
+            except OSError as exc:
+                items = []
+                item_index_map = {}
+                browser_item_labels = []
+                error_message = str(exc)
+            except Exception as exc:
+                items = []
+                item_index_map = {}
+                browser_item_labels = []
+                error_message = f"Falha inesperada ao carregar a playlist: {exc}."
+
+            if self._library_stop_event.is_set():
+                return
+
+            wx.CallAfter(
+                self._finish_playlist_load_request,
+                request,
+                items,
+                item_index_map,
+                browser_item_labels,
+                error_message,
+            )
+
+    def _is_current_library_request(self, state, request_serial):
+        if not isinstance(state, PlaylistState):
+            return False
+
+        if state.library_request_serial != request_serial:
+            return False
+
+        return self._resolve_playlist_state_index(state) != wx.NOT_FOUND
+
+    def _begin_playlist_load(self, state, playlist_path, title):
+        state.finish_library_load()
+        state.clear_folder_location()
+        state.title = title
+        state.source_path = None
+        state.set_items([], auto_select=False)
+        state.begin_library_load("Carregando playlist...")
+
+    def _begin_folder_load(self, state, folder_path, root_path=None, selected_path=None):
+        normalized_root_path = self._normalize_path(root_path) if root_path else folder_path
+        if not normalized_root_path:
+            normalized_root_path = folder_path
+
+        state.finish_library_load()
+        state.set_folder_location(
+            root_path=normalized_root_path,
+            current_path=folder_path,
+            selected_path=selected_path,
+        )
+        state.title = build_folder_tab_title(folder_path)
+        state.source_path = None
+        state.set_items([], auto_select=False)
+        state.begin_library_load("Carregando itens da pasta...")
+
+    def _finish_playlist_load_request(self, request, items, item_index_map, browser_item_labels, error_message):
+        if self._library_stop_event.is_set():
+            return
+
+        state = request.get("state")
+        request_serial = request.get("serial")
+        if not self._is_current_library_request(state, request_serial):
+            return
+
+        state.finish_library_load()
+        tab_index = self._resolve_playlist_state_index(state)
+        if tab_index == wx.NOT_FOUND:
+            return
+
+        if error_message:
+            state.title = request.get("previous_title") or state.title
+            state.source_path = request.get("previous_source_path")
+            state.set_items([], auto_select=False)
+            self.notebook.SetPageText(tab_index, state.title)
+            if self._is_current_playlist_state(state):
+                self._update_title()
+                self._refresh_playlist_browser()
+            wx.MessageBox(error_message, "Abrir playlist", wx.OK | wx.ICON_ERROR, self)
+            return
+
+        if not items:
+            state.title = request.get("previous_title") or state.title
+            state.source_path = request.get("previous_source_path")
+            state.set_items([], auto_select=False)
+            self.notebook.SetPageText(tab_index, state.title)
+            if self._is_current_playlist_state(state):
+                self._update_title()
+                self._refresh_playlist_browser()
+            wx.MessageBox(
+                "Nenhum item válido foi encontrado na playlist selecionada.",
+                "Abrir playlist",
+                wx.OK | wx.ICON_INFORMATION,
+                self,
+            )
+            return
+
+        state.title = request["title"]
+        state.source_path = request["playlist_path"]
+        state.set_items_prepared(items, item_index_map, browser_item_labels, start_index=0)
+        self.notebook.SetPageText(tab_index, state.title)
+        self._add_recent_path("recent_playlists", request["playlist_path"])
+
+        if self._is_current_playlist_state(state):
+            self._play_media(
+                index=tab_index,
+                announce_message=f"Playlist carregada: {state.title}. {len(items)} item(ns).",
+            )
+
+    def _finish_folder_load_request(
+        self,
+        request,
+        folder_entries,
+        folder_entry_index_map,
+        media_files,
+        media_item_index_map,
+        media_browser_labels,
+        error_message,
+    ):
+        if self._library_stop_event.is_set():
+            return
+
+        state = request.get("state")
+        request_serial = request.get("serial")
+        if not self._is_current_library_request(state, request_serial):
+            return
+
+        state.finish_library_load()
+        state.set_folder_entries(folder_entries, entry_index_map=folder_entry_index_map)
+        state.set_items_prepared(media_files, media_item_index_map, media_browser_labels, auto_select=False)
+
+        tab_index = self._resolve_playlist_state_index(state)
+        if tab_index == wx.NOT_FOUND:
+            return
+
+        self.notebook.SetPageText(tab_index, state.title)
+
+        if error_message:
+            if self._is_current_playlist_state(state):
+                self._update_title()
+                self._refresh_playlist_browser()
+            self._announce(f"Não foi possível carregar a pasta selecionada: {error_message}.")
+            return
+
+        recent_path = request.get("recent_path")
+        if recent_path:
+            self._add_recent_path("recent_folders", recent_path)
+
+        if self._is_current_playlist_state(state):
+            self._update_title()
+            self._refresh_playlist_browser()
+            if request.get("focus_items"):
+                browser = self._get_browser_panel(tab_index)
+                if browser:
+                    wx.CallAfter(browser.focus_current_item)
+
+            completion_announcement = request.get("completion_announcement")
+            if completion_announcement:
+                wx.CallAfter(self._announce, completion_announcement)
+
     def _insert_tab(self, state, page, select=False, index=None):
         if index is None:
             index = len(self.playlists)
@@ -291,6 +589,14 @@ class FrameLibraryMixin:
         self.active_playlist_index = index
         self._apply_equalizer_state(state)
 
+        if state.is_loading:
+            self._unload_player()
+            self._update_title()
+            self._refresh_playlist_browser()
+            if announce:
+                self._announce(state.loading_message or f"Carregando {state.title}.")
+            return
+
         if not state.current_media_path:
             self._unload_player()
             self._update_title()
@@ -353,8 +659,9 @@ class FrameLibraryMixin:
             return
 
         if media_path is not None and state.current_media_path != media_path:
-            if media_path in state.items:
-                state.select_index(state.items.index(media_path))
+            media_index = state.index_of_item(media_path)
+            if media_index is not None:
+                state.select_index(media_index)
             else:
                 state.current_media_path = media_path
 
@@ -386,6 +693,10 @@ class FrameLibraryMixin:
         state = self._get_playlist_state()
         if not state:
             self.SetTitle(APP_TITLE)
+            return
+
+        if state.is_loading:
+            self.SetTitle(f"{APP_TITLE} — {state.title}")
             return
 
         if not state.current_media_path:
@@ -453,8 +764,9 @@ class FrameLibraryMixin:
 
         current_index = state.current_index
         if current_index < 0 or current_index >= len(state.items):
-            if state.current_media_path in state.items:
-                current_index = state.items.index(state.current_media_path)
+            media_index = state.index_of_item(state.current_media_path)
+            if media_index is not None:
+                current_index = media_index
                 state.current_index = current_index
             else:
                 self._announce("Nenhum item atual para reordenar.")
@@ -593,8 +905,8 @@ class FrameLibraryMixin:
         if not state or not state.is_folder_tab or not state.folder_current_path:
             return []
 
-        if state.folder_entries:
-            return list(state.folder_entries)
+        if state.is_loading or state.folder_entries_loaded:
+            return state.folder_entries
 
         try:
             entries = discover_folder_entries(state.folder_current_path)
@@ -602,55 +914,28 @@ class FrameLibraryMixin:
             entries = []
 
         state.set_folder_entries(entries)
-        return list(entries)
-
-    def _configure_folder_tab_state(self, state, folder_path, root_path=None, selected_path=None):
-        normalized_folder_path = self._normalize_path(folder_path)
-        if not normalized_folder_path or not os.path.isdir(normalized_folder_path):
-            return False
-
-        normalized_root_path = self._normalize_path(root_path) if root_path else normalized_folder_path
-        if not normalized_root_path:
-            normalized_root_path = normalized_folder_path
-
-        state.set_folder_location(
-            root_path=normalized_root_path,
-            current_path=normalized_folder_path,
-            selected_path=selected_path,
-        )
-        state.title = build_folder_tab_title(normalized_folder_path)
-        state.source_path = None
-
-        try:
-            folder_entries = discover_folder_entries(normalized_folder_path)
-        except OSError:
-            folder_entries = []
-
-        try:
-            media_files = discover_media_files(normalized_folder_path)
-        except OSError:
-            media_files = []
-
-        state.set_folder_entries(folder_entries)
-        state.set_items(media_files, auto_select=False)
-        return True
+        return state.folder_entries
 
     def _prepare_folder_tab(self, folder_path):
-        current_index = self.notebook.GetSelection()
-        current_tab = self._get_tab_state(current_index)
-        state = current_tab if isinstance(current_tab, PlaylistState) else self._get_active_playlist_state()
-
-        if isinstance(current_tab, PlaylistState) and current_tab.is_empty:
-            target_index = current_index
-            state = current_tab
-        elif state and state.is_empty:
-            target_index = self._get_active_playlist_index()
-        else:
-            target_index = self._create_empty_playlist_tab(select=False)
-            state = self._get_playlist_state(target_index)
-
-        if not state or not self._configure_folder_tab_state(state, folder_path):
+        normalized_folder_path = self._normalize_path(folder_path)
+        if not normalized_folder_path or not os.path.isdir(normalized_folder_path):
             return None
+
+        state, target_index = self._prepare_library_target_tab()
+        if not state:
+            return None
+
+        self._begin_folder_load(state, normalized_folder_path, root_path=normalized_folder_path)
+        self._queue_library_request(
+            {
+                "kind": "folder",
+                "state": state,
+                "folder_path": normalized_folder_path,
+                "recent_path": normalized_folder_path,
+                "focus_items": True,
+                "completion_announcement": f"Pasta aberta no navegador: {folder_display_name(normalized_folder_path)}.",
+            }
+        )
 
         self.notebook.SetPageText(target_index, state.title)
         self._select_tab(target_index, announce=False)
@@ -664,13 +949,29 @@ class FrameLibraryMixin:
         if not state or not state.is_folder_tab:
             return False
 
-        if not self._configure_folder_tab_state(
-            state,
-            folder_path,
-            root_path=state.folder_root_path or folder_path,
-            selected_path=selected_path,
-        ):
+        normalized_folder_path = self._normalize_path(folder_path)
+        if not normalized_folder_path or not os.path.isdir(normalized_folder_path):
             return False
+
+        self._begin_folder_load(
+            state,
+            normalized_folder_path,
+            root_path=state.folder_root_path or normalized_folder_path,
+            selected_path=selected_path,
+        )
+        self._queue_library_request(
+            {
+                "kind": "folder",
+                "state": state,
+                "folder_path": normalized_folder_path,
+                "focus_items": True,
+                "completion_announcement": (
+                    f"Pasta atual: {folder_display_name(normalized_folder_path)}."
+                    if announce
+                    else None
+                ),
+            }
+        )
 
         self.notebook.SetPageText(self._get_current_tab_index(), state.title)
         self._unload_player()
@@ -678,13 +979,17 @@ class FrameLibraryMixin:
         self._refresh_playlist_browser()
 
         if announce:
-            self._announce(f"Pasta atual: {folder_display_name(state.folder_current_path)}.")
+            self._announce(f"Carregando pasta: {folder_display_name(normalized_folder_path)}.")
 
         return True
 
     def _preview_folder_file(self, media_path, announce=True):
         state = self._get_playlist_state()
         if not state or not state.is_folder_tab or not state.folder_current_path:
+            return
+
+        if state.is_loading:
+            self._announce("A pasta ainda está sendo carregada.")
             return
 
         normalized_media_path = self._normalize_path(media_path)
@@ -701,24 +1006,27 @@ class FrameLibraryMixin:
 
         state.folder_selected_path = normalized_media_path
 
-        if normalized_media_path not in state.items:
+        if not state.contains_item(normalized_media_path):
             try:
-                media_files = discover_media_files(state.folder_current_path)
+                folder_entries, media_files = scan_folder_contents(state.folder_current_path)
             except OSError:
+                folder_entries = []
                 media_files = []
+            state.set_folder_entries(folder_entries)
             state.set_items(media_files, auto_select=False)
 
-        if normalized_media_path not in state.items:
+        media_index = state.index_of_item(normalized_media_path)
+        if media_index is None:
             self._announce("O arquivo selecionado não pertence à pasta atual.")
             self._refresh_playlist_browser()
             return
 
         if same_media_already_playing:
-            state.select_index(state.items.index(normalized_media_path))
+            state.select_index(media_index)
             self._refresh_playlist_browser()
             return
 
-        state.select_index(state.items.index(normalized_media_path))
+        state.select_index(media_index)
         announce_message = ""
         self._play_media(index=self._get_current_tab_index(), announce_message=announce_message)
 
@@ -748,11 +1056,7 @@ class FrameLibraryMixin:
         tab_index = self._prepare_folder_tab(normalized_folder_path)
         if tab_index is None:
             return False
-
-        self._add_recent_path("recent_folders", normalized_folder_path)
-
-        self._focus_item_navigation(announce=False)
-        self._announce(f"Pasta aberta no navegador: {folder_display_name(normalized_folder_path)}.")
+        self._announce(f"Carregando pasta: {folder_display_name(normalized_folder_path)}.")
         return True
 
     def _open_playlist_path(self, playlist_path):
@@ -762,22 +1066,31 @@ class FrameLibraryMixin:
 
         self._remember_directory(normalized_playlist_path)
 
-        items = load_playlist(normalized_playlist_path)
-        if not items:
-            wx.MessageBox(
-                "Nenhum item válido foi encontrado na playlist selecionada.",
-                "Abrir playlist",
-                wx.OK | wx.ICON_INFORMATION,
-            )
+        state, target_index = self._prepare_library_target_tab()
+        if not state:
             return False
 
         title = playlist_display_name(normalized_playlist_path)
-        tab_index = self._prepare_playlist_tab(items, title, source_path=normalized_playlist_path)
-        self._play_media(
-            index=tab_index,
-            announce_message=f"Playlist carregada: {title}. {len(items)} item(ns).",
+        previous_title = state.title
+        previous_source_path = state.source_path
+        self._begin_playlist_load(state, normalized_playlist_path, title)
+        self._queue_library_request(
+            {
+                "kind": "playlist",
+                "state": state,
+                "playlist_path": normalized_playlist_path,
+                "title": title,
+                "previous_title": previous_title,
+                "previous_source_path": previous_source_path,
+            }
         )
-        self._add_recent_path("recent_playlists", normalized_playlist_path)
+
+        self.notebook.SetPageText(target_index, state.title)
+        self._select_tab(target_index, announce=False)
+        self._unload_player()
+        self._update_title()
+        self._refresh_playlist_browser()
+        self._announce(f"Carregando playlist: {title}.")
         return True
 
     def _focus_item_navigation(self, announce=True):
@@ -822,6 +1135,10 @@ class FrameLibraryMixin:
                 entries=self._get_folder_entries(current_state),
                 selected_path=current_state.folder_selected_path,
                 current_media_path=current_state.current_media_path,
+                entries_revision=current_state.folder_entries_revision,
+                loading=current_state.is_loading,
+                loading_message=current_state.loading_message,
+                entry_index_map=current_state.folder_entry_index_map,
             )
             return
 

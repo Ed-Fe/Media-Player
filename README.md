@@ -89,6 +89,7 @@ For a repeatable end-to-end updater test flow, see `docs/update-testing.md`.
 - `Home` / `End`: jump to start / end of the current media
 - `Ctrl+T`: new playlist tab
 - `Ctrl+W`: close current media or close an empty tab
+- `Ctrl+Shift+W`: close the current tab or playlist directly
 - `Ctrl+PageUp` / `Ctrl+PageDown`: previous / next track
 - `Ctrl+Shift+E`: open the equalizer tab for the active media tab
 - `Ctrl+Tab` / `Ctrl+Shift+Tab`: next / previous tab
@@ -97,6 +98,7 @@ For a repeatable end-to-end updater test flow, see `docs/update-testing.md`.
 - `Ctrl+,`: open preferences
 - `F1`: open quick keyboard help
 - `F6`: switch focus between the item list and the player
+- In the item browser, type letters or numbers to jump quickly to matching items
 - `T`: announce playback time
 - `V`: announce volume
 - `S`: announce player status

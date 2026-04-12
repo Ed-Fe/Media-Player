@@ -41,6 +41,7 @@ class VLCPlayerFrame(
         self._update_restart_pending = False
 
         self._create_player_backend()
+        self._create_library_loader()
 
         self._build_menu_bar()
         self._build_ui()
