@@ -243,7 +243,7 @@ class FrameLibraryTabsMixin:
         if not page:
             return None
 
-        return getattr(page, "video_panel", None)
+        return getattr(page, "video_surface", None) or getattr(page, "video_panel", None)
 
     def _get_browser_panel(self, index=None):
         if index is None:

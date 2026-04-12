@@ -98,15 +98,36 @@ class PlaylistState:
         self.playback_order = []
         self.playback_order_position = 0
 
+    def _fallback_browser_item_label(self, item):
+        normalized_item = str(item or "")
+        return os.path.basename(normalized_item) or normalized_item
+
+    def _normalize_browser_item_labels(self, labels):
+        labels_by_item = {}
+        for item, label in zip(self.items, labels or []):
+            normalized_label = str(label or "").strip()
+            if normalized_label:
+                labels_by_item.setdefault(item, []).append(normalized_label)
+
+        normalized_labels = []
+        for item in self.items:
+            existing_labels = labels_by_item.get(item)
+            if existing_labels:
+                normalized_labels.append(existing_labels.pop(0))
+            else:
+                normalized_labels.append(self._fallback_browser_item_label(item))
+
+        return normalized_labels
+
     def _apply_prepared_items(self, items, item_index_map, browser_item_labels):
         self.items = items if isinstance(items, list) else list(items)
         self.item_index_map = dict(item_index_map or {})
-        self.browser_item_labels = list(browser_item_labels or [])
+        self.browser_item_labels = self._normalize_browser_item_labels(browser_item_labels)
         self.items_revision += 1
 
     def refresh_browser_item_labels(self):
         self.item_index_map = {item: index for index, item in enumerate(self.items)}
-        self.browser_item_labels = [os.path.basename(item) or item for item in self.items]
+        self.browser_item_labels = self._normalize_browser_item_labels(self.browser_item_labels)
         self.items_revision += 1
 
     def contains_item(self, media_path):
@@ -357,6 +378,7 @@ class PlaylistState:
         return {
             "title": self.title,
             "items": list(self.items),
+            "browser_item_labels": list(self.browser_item_labels),
             "current_index": self.current_index,
             "current_media_path": self.current_media_path,
             "last_position_ms": self.last_position_ms,
@@ -378,6 +400,9 @@ class PlaylistState:
         title = str(data.get("title") or build_playlist_title(items))
         state = cls(title=title)
         state.items = items
+        raw_browser_item_labels = data.get("browser_item_labels")
+        if isinstance(raw_browser_item_labels, list):
+            state.browser_item_labels = [str(label or "") for label in raw_browser_item_labels]
         state.refresh_browser_item_labels()
         state.source_path = data.get("source_path")
         state.shuffle_enabled = bool(data.get("shuffle_enabled", False))

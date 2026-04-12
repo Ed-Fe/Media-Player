@@ -99,6 +99,20 @@ def build_playlist_source(playlist_id):
     return f"{YTMUSIC_SOURCE_PREFIX}{source_kind}/{normalized_playlist_id}"
 
 
+def extract_playlist_id_from_source(source_path):
+    normalized_source_path = str(source_path or "").strip()
+    if not normalized_source_path.lower().startswith(YTMUSIC_SOURCE_PREFIX):
+        return None
+
+    parsed_source = urlparse(normalized_source_path)
+    source_kind = str(parsed_source.netloc or "").strip().lower()
+    if source_kind not in {"playlist", "mix"}:
+        return None
+
+    playlist_id = str(parsed_source.path or "").strip("/")
+    return playlist_id or None
+
+
 def is_youtube_music_media(media_path):
     normalized_media_path = str(media_path or "").strip()
     if not normalized_media_path:

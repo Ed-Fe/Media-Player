@@ -11,6 +11,7 @@ class EqualizerTabPanel(wx.Panel):
         *,
         on_toggle_enabled,
         on_select_preset,
+        on_apply_to_all_tabs,
         on_create_preset,
         on_edit_preset,
         on_duplicate_preset,
@@ -22,6 +23,7 @@ class EqualizerTabPanel(wx.Panel):
         self._updating_controls = False
         self._on_toggle_enabled = on_toggle_enabled
         self._on_select_preset = on_select_preset
+        self._on_apply_to_all_tabs = on_apply_to_all_tabs
         self._on_create_preset = on_create_preset
         self._on_edit_preset = on_edit_preset
         self._on_duplicate_preset = on_duplicate_preset
@@ -35,7 +37,8 @@ class EqualizerTabPanel(wx.Panel):
             label=(
                 "Ajuste o equalizador da aba de mídia ativa. "
                 "Use os botões para criar presets, editar ou duplicar presets personalizados "
-                "e salvar uma cópia editável de presets do VLC."
+                "e salvar uma cópia editável de presets do VLC. "
+                "Quando quiser repetir a mesma configuração nas abas abertas, use Aplicar em todas as abas."
             ),
         )
         intro_label.Wrap(620)
@@ -111,12 +114,23 @@ class EqualizerTabPanel(wx.Panel):
         for button in (self.new_button, self.edit_button, self.duplicate_button, self.delete_button):
             button_sizer.Add(button, 0, wx.RIGHT, 8)
 
+        self.apply_all_button = wx.Button(self, label="Aplicar em &todas as abas")
+        self._configure_action_button(
+            self.apply_all_button,
+            name="Aplicar equalizador em todas as abas de mídia",
+            description=(
+                "Copia o estado atual do equalizador, incluindo ativação e preset, "
+                "para todas as abas de mídia abertas."
+            ),
+        )
+
         controls_box.Add(self.enable_checkbox, 0, wx.ALL | wx.EXPAND, 6)
         controls_box.Add(preset_label, 0, wx.LEFT | wx.RIGHT | wx.TOP | wx.EXPAND, 6)
         controls_box.Add(self.preset_choice, 0, wx.ALL | wx.EXPAND, 6)
         controls_box.Add(preset_description_label, 0, wx.LEFT | wx.RIGHT | wx.TOP | wx.EXPAND, 6)
         controls_box.Add(self.preset_description_ctrl, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND, 6)
         controls_box.Add(button_sizer, 0, wx.ALL | wx.EXPAND, 6)
+        controls_box.Add(self.apply_all_button, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND, 6)
         root_sizer.Add(controls_box, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND, 10)
 
         values_box = wx.StaticBoxSizer(wx.StaticBox(self, label="Resumo do preset"), wx.VERTICAL)
@@ -154,6 +168,7 @@ class EqualizerTabPanel(wx.Panel):
         self.edit_button.Bind(wx.EVT_BUTTON, lambda _event: self._on_edit_preset())
         self.duplicate_button.Bind(wx.EVT_BUTTON, lambda _event: self._on_duplicate_preset())
         self.delete_button.Bind(wx.EVT_BUTTON, lambda _event: self._on_delete_preset())
+        self.apply_all_button.Bind(wx.EVT_BUTTON, lambda _event: self._on_apply_to_all_tabs())
 
     def _configure_action_button(self, button, *, name, description):
         button.SetName(name)
@@ -209,7 +224,17 @@ class EqualizerTabPanel(wx.Panel):
             f"Descrição do preset atual: {description}"
         )
 
-    def update_view(self, *, target_tab_title, equalizer_enabled, presets, selected_preset_id, selected_preset, band_frequencies_hz):
+    def update_view(
+        self,
+        *,
+        target_tab_title,
+        equalizer_enabled,
+        presets,
+        selected_preset_id,
+        selected_preset,
+        band_frequencies_hz,
+        can_apply_to_all,
+    ):
         self.Freeze()
         self._updating_controls = True
         try:
@@ -252,6 +277,7 @@ class EqualizerTabPanel(wx.Panel):
                     label.SetLabel("0.0 dB")
 
             self._update_action_buttons(selected_preset)
+            self.apply_all_button.Enable(bool(can_apply_to_all and selected_preset is not None))
             if rows_added:
                 self.Layout()
         finally:

@@ -124,10 +124,19 @@ class PreferencesDialog(wx.Dialog):
 
         playback_box = wx.StaticBoxSizer(wx.StaticBox(page, label="Controles de reprodução"), wx.VERTICAL)
         self.shuffle_new_playlists_checkbox = wx.CheckBox(page, label="Ativar e&mbaralhamento em novas playlists")
+        self.disable_video_output_checkbox = wx.CheckBox(page, label="Desativar saída de &vídeo (tocar só o áudio)")
         self._configure_checkbox(
             self.shuffle_new_playlists_checkbox,
             "Ativar embaralhamento em novas playlists",
             "Ativa o modo aleatório automaticamente em playlists criadas depois de salvar as preferências.",
+        )
+        self._configure_checkbox(
+            self.disable_video_output_checkbox,
+            "Desativar saída de vídeo",
+            (
+                "Mantém a reprodução apenas em áudio, inclusive em arquivos de vídeo. "
+                "Útil para evitar a abertura de janelas externas do VLC no Windows."
+            ),
         )
 
         volume_group, self.default_volume_ctrl = self._build_spin_control_group(
@@ -171,7 +180,8 @@ class PreferencesDialog(wx.Dialog):
         for group in (volume_group, volume_step_group, crossfade_group, seek_step_group, repeat_group):
             playback_box.Add(group, 0, wx.LEFT | wx.RIGHT | wx.TOP | wx.EXPAND, 6)
 
-        playback_box.Add(self.shuffle_new_playlists_checkbox, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND, 6)
+        playback_box.Add(self.shuffle_new_playlists_checkbox, 0, wx.LEFT | wx.RIGHT | wx.TOP | wx.EXPAND, 6)
+        playback_box.Add(self.disable_video_output_checkbox, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND, 6)
 
         page_sizer.Add(info_label, 0, wx.ALL | wx.EXPAND, 10)
         page_sizer.Add(playback_box, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND, 10)
@@ -254,6 +264,7 @@ class PreferencesDialog(wx.Dialog):
         self.remember_last_folder_checkbox.SetValue(settings.remember_last_folder)
         self.confirm_on_exit_checkbox.SetValue(settings.confirm_on_exit)
         self.announcements_enabled_checkbox.SetValue(settings.announcements_enabled)
+        self.disable_video_output_checkbox.SetValue(settings.disable_video_output)
         self.default_volume_ctrl.SetValue(settings.default_volume)
         self.crossfade_ctrl.SetValue(settings.crossfade_seconds)
         self.volume_step_ctrl.SetValue(settings.volume_step)
@@ -270,6 +281,7 @@ class PreferencesDialog(wx.Dialog):
         settings.remember_last_folder = self.remember_last_folder_checkbox.GetValue()
         settings.confirm_on_exit = self.confirm_on_exit_checkbox.GetValue()
         settings.announcements_enabled = self.announcements_enabled_checkbox.GetValue()
+        settings.disable_video_output = self.disable_video_output_checkbox.GetValue()
         settings.default_volume = int(self.default_volume_ctrl.GetValue())
         settings.crossfade_seconds = int(self.crossfade_ctrl.GetValue())
         settings.volume_step = int(self.volume_step_ctrl.GetValue())

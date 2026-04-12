@@ -2,6 +2,7 @@ from .browser import PlaylistBrowserPanel, VirtualItemsListCtrl
 from .media_scan import (
     discover_folder_entries,
     discover_media_files,
+    is_audio_playback_media,
     folder_display_name,
     is_audio_only_media,
     is_supported_media,
@@ -34,6 +35,7 @@ __all__ = [
     "discover_folder_entries",
     "discover_media_files",
     "folder_display_name",
+    "is_audio_playback_media",
     "is_audio_only_media",
     "is_playlist_source",
     "is_remote_media_path",

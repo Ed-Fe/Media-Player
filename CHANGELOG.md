@@ -12,6 +12,8 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 - Suporte a abrir playlists remotas `.m3u/.m3u8` por URL, preservando entradas remotas e resolvendo caminhos relativos a partir da origem da playlist.
 - Configuração de **crossfade** nas Preferências, com suporte a sobrepor automaticamente faixas de áudio e opção `0` para desativar o recurso.
 - Suporte inicial ao **YouTube Music** com autenticação por navegador, importação de `browser.json`/JSON de cookies/`cookies.txt`, abertura de playlists e mixes da conta e resolução de streams com `yt-dlp`.
+- Botão **Aplicar em todas as abas** no Equalizador para copiar o preset e o estado atual para todas as abas de mídia abertas.
+- Preferência **Desativar saída de vídeo (tocar só o áudio)**, ativada por padrão, para evitar janelas externas do VLC quando o usuário quer reproduzir vídeos só com áudio.
 
 ### Changed
 - O menu **Arquivo** passou a concentrar a abertura geral em uma única ação, mantendo atalhos específicos para abrir arquivos locais e pastas no navegador.
@@ -20,9 +22,13 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 - A reprodução passou a usar players VLC dedicados por faixa no crossfade, com tratamento específico para o backend de áudio do Windows e melhor folga de inicialização entre músicas.
 - O submenu **YouTube Music** passou a atualizar o estado da conexão, permitir desconectar a conta salva e carregar playlists/mixes sem bloquear a interface.
 - O código do player foi reorganizado por responsabilidades em pacotes como `frames/`, `library/`, `playlists/`, `preferences/`, `equalizer/`, `update/` e `youtube_music/`, com divisão adicional dos fluxos de biblioteca em mixins menores.
+- A área do player agora mostra uma mensagem clara quando a saída de vídeo está desativada e a mídia está tocando em modo áudio apenas.
+- Abas restauradas do YouTube Music agora tentam recuperar novamente os rótulos corretos das faixas após reconectar a conta.
 
 ### Fixed
 - Transições de áudio com menos cortes e sem retorno repentino de volume no fim do crossfade ao avançar entre faixas compatíveis.
+- Próxima/anterior e crossfade do YouTube Music ficaram mais estáveis com cache/prefetch de streams e fallback automático para reprodução normal quando a próxima faixa demora a resolver.
+- Operações em segundo plano do YouTube Music agora têm timeout defensivo para evitar deixar o app preso em estado ocupado.
 
 ### Notes
 - Esta versão inclui uma refatoração estrutural grande. Apesar da validação rápida e das verificações feitas durante o desenvolvimento, ainda podem aparecer problemas ou regressões em fluxos menos exercitados.

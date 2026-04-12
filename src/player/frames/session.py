@@ -51,6 +51,10 @@ class FrameSessionMixin:
             state = PlaylistState.from_dict(payload)
             restored_states.append(state)
 
+        remember_restored_youtube_music_states = getattr(self, "_remember_restored_youtube_music_states", None)
+        if callable(remember_restored_youtube_music_states):
+            remember_restored_youtube_music_states(restored_states)
+
         self.playlists[0] = restored_states[0]
         self.notebook.SetPageText(0, restored_states[0].title)
 

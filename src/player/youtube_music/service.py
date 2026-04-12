@@ -1,4 +1,6 @@
 import os
+import threading
+import time
 
 from .auth import (
     YTMUSIC_BROWSER_AUTH_FILE_NAME,
@@ -20,9 +22,14 @@ from .streams import resolve_stream_url as resolve_music_stream_url
 
 
 class YouTubeMusicService:
+    _STREAM_CACHE_TTL_SECONDS = 1800
+
     def __init__(self):
         self._client = None
         self._account_info = None
+        self._stream_cache = {}
+        self._stream_cache_lock = threading.Lock()
+        self._stream_prefetch_in_progress = set()
 
     @property
     def browser_auth_file_path(self):
@@ -53,6 +60,68 @@ class YouTubeMusicService:
     def clear_client_cache(self):
         self._client = None
         self._account_info = None
+        with self._stream_cache_lock:
+            self._stream_cache = {}
+            self._stream_prefetch_in_progress = set()
+
+    def _normalize_stream_cache_key(self, media_path):
+        return str(media_path or "").strip()
+
+    def get_cached_stream_url(self, media_path):
+        cache_key = self._normalize_stream_cache_key(media_path)
+        if not is_youtube_music_media_fn(cache_key):
+            return None
+
+        now = time.monotonic()
+        with self._stream_cache_lock:
+            cache_entry = self._stream_cache.get(cache_key)
+            if not cache_entry:
+                return None
+
+            if cache_entry["expires_at"] <= now:
+                self._stream_cache.pop(cache_key, None)
+                return None
+
+            return cache_entry["resolved_url"]
+
+    def _cache_stream_url(self, media_path, resolved_url):
+        cache_key = self._normalize_stream_cache_key(media_path)
+        normalized_resolved_url = str(resolved_url or "").strip()
+        if not cache_key or not normalized_resolved_url or not is_youtube_music_media_fn(cache_key):
+            return normalized_resolved_url
+
+        with self._stream_cache_lock:
+            self._stream_cache[cache_key] = {
+                "resolved_url": normalized_resolved_url,
+                "expires_at": time.monotonic() + self._STREAM_CACHE_TTL_SECONDS,
+            }
+
+        return normalized_resolved_url
+
+    def prefetch_stream_url(self, media_path):
+        cache_key = self._normalize_stream_cache_key(media_path)
+        if not is_youtube_music_media_fn(cache_key):
+            return False
+
+        if self.get_cached_stream_url(cache_key):
+            return True
+
+        with self._stream_cache_lock:
+            if cache_key in self._stream_prefetch_in_progress:
+                return False
+            self._stream_prefetch_in_progress.add(cache_key)
+
+        def worker():
+            try:
+                self.resolve_stream_url(cache_key)
+            except Exception:
+                pass
+            finally:
+                with self._stream_cache_lock:
+                    self._stream_prefetch_in_progress.discard(cache_key)
+
+        threading.Thread(target=worker, daemon=True).start()
+        return True
 
     def disconnect(self):
         self.clear_client_cache()
@@ -199,7 +268,13 @@ class YouTubeMusicService:
         return self._client
 
     def resolve_stream_url(self, media_path):
-        return resolve_music_stream_url(media_path)
+        normalized_media_path = self._normalize_stream_cache_key(media_path)
+        cached_stream_url = self.get_cached_stream_url(normalized_media_path)
+        if cached_stream_url:
+            return cached_stream_url
+
+        resolved_stream_url = resolve_music_stream_url(normalized_media_path)
+        return self._cache_stream_url(normalized_media_path, resolved_stream_url)
 
     def build_watch_url(self, video_id, playlist_id=None):
         return build_watch_url_fn(video_id, playlist_id=playlist_id)

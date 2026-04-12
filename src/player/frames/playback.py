@@ -8,12 +8,16 @@ import time
 import vlc
 import wx
 
-from ..constants import LOCAL_FILE_CACHING_MS, PROGRESS_GAUGE_RANGE, RESTORE_DELAY_MS
-from ..library import folder_display_name, is_audio_only_media
+from ..constants import LOCAL_FILE_CACHING_MS, PROGRESS_GAUGE_RANGE, RESTORE_DELAY_MS, WINDOWS_VLC_VIDEO_OUTPUT
+from ..library import folder_display_name, is_audio_playback_media
 from ..playlists import PlaylistState
+from ..youtube_music import is_youtube_music_media
 
 
 class FramePlaybackMixin:
+    def _video_output_enabled(self):
+        return not bool(getattr(self.settings, "disable_video_output", False))
+
     def _initialize_player_state(self):
         self._bind_player_to_window()
         if self.settings.restore_session_on_startup and self._restore_session():
@@ -46,9 +50,14 @@ class FramePlaybackMixin:
         self._playback_worker.start()
 
     def _build_vlc_instance(self):
-        args = ["--quiet", f"--file-caching={LOCAL_FILE_CACHING_MS}"]
+        args = ["--quiet", "--no-video-title-show", f"--file-caching={LOCAL_FILE_CACHING_MS}"]
+        if not self._video_output_enabled():
+            args.append("--no-video")
         if sys.platform.startswith("win"):
             args.append("--aout=directsound")
+            preferred_vout = str(WINDOWS_VLC_VIDEO_OUTPUT or "").strip()
+            if self._video_output_enabled() and preferred_vout:
+                args.append(f"--vout={preferred_vout}")
         if sys.platform.startswith("linux"):
             args.append("--no-xlib")
         return vlc.Instance(*args)
@@ -71,6 +80,14 @@ class FramePlaybackMixin:
             raise RuntimeError("Instância do VLC indisponível para o player.")
 
         player = target_instance.media_player_new()
+        try:
+            player.video_set_key_input(False)
+        except Exception:
+            pass
+        try:
+            player.video_set_mouse_input(False)
+        except Exception:
+            pass
         event_manager = player.event_manager()
         event_manager.event_attach(vlc.EventType.MediaPlayerEndReached, self._on_media_end_reached, player_key)
         event_manager.event_attach(vlc.EventType.MediaPlayerPlaying, self._on_media_player_playing, player_key)
@@ -112,6 +129,56 @@ class FramePlaybackMixin:
             return
         self._player_loaded_media_paths[player_key] = str(media_path or "").strip() or None
 
+    def _recreate_player_slot(self, player_key, *, index=None):
+        existing_player = self._managed_player(player_key)
+        if existing_player is not None:
+            try:
+                existing_player.stop()
+            except Exception:
+                pass
+            try:
+                existing_player.release()
+            except Exception:
+                pass
+
+        existing_instance = getattr(self, "_player_instances", {}).get(player_key)
+        if existing_instance is not None:
+            try:
+                existing_instance.release()
+            except Exception:
+                pass
+
+        instance = self._build_vlc_instance()
+        self._player_instances[player_key] = instance
+        player, event_manager = self._create_managed_player(player_key, instance)
+        self._players[player_key] = player
+        self._player_event_managers[player_key] = event_manager
+        self._set_player_loaded_media_path(player_key, None)
+
+        if player_key == getattr(self, "_active_player_key", None):
+            self.instance = instance
+            self.player = player
+
+        self._bind_player_to_window(index=index)
+        return player
+
+    def _video_output_handle(self, index=None):
+        if not self._video_output_enabled():
+            return None
+
+        video_panel = self._get_video_panel(index)
+        if not video_panel:
+            return None
+
+        handle = video_panel.GetHandle()
+        if not handle:
+            return None
+
+        try:
+            return int(handle)
+        except (TypeError, ValueError):
+            return None
+
     def _on_media_end_reached(self, _event, player_key):
         wx.CallAfter(self._handle_player_end_reached, player_key)
 
@@ -148,6 +215,9 @@ class FramePlaybackMixin:
     def _handle_player_error(self, player_key):
         crossfade_state = getattr(self, "_crossfade_state", None)
         if not crossfade_state or crossfade_state.get("incoming_key") != player_key:
+            return
+
+        if self._fallback_pending_crossfade_to_regular_playback():
             return
 
         self._cancel_crossfade_transition(stop_incoming=True, stop_outgoing=False, invalidate_requests=False)
@@ -198,6 +268,48 @@ class FramePlaybackMixin:
     def _media_paths_match(self, first_path, second_path):
         return self._normalize_media_comparison_path(first_path) == self._normalize_media_comparison_path(second_path)
 
+    def _youtube_music_service_for_playback(self):
+        youtube_music_service = getattr(self, "_youtube_music_service", None)
+        if youtube_music_service is not None:
+            return youtube_music_service
+
+        get_service = getattr(self, "_get_youtube_music_service", None)
+        if callable(get_service):
+            return get_service()
+
+        return None
+
+    def _youtube_music_media_requires_prefetched_stream(self, media_path):
+        if not is_youtube_music_media(media_path):
+            return False
+
+        youtube_music_service = self._youtube_music_service_for_playback()
+        if youtube_music_service is None:
+            return False
+
+        return not bool(youtube_music_service.get_cached_stream_url(media_path))
+
+    def _prefetch_media_stream(self, media_path):
+        if not is_youtube_music_media(media_path):
+            return False
+
+        youtube_music_service = self._youtube_music_service_for_playback()
+        if youtube_music_service is None:
+            return False
+
+        return bool(youtube_music_service.prefetch_stream_url(media_path))
+
+    def _prefetch_upcoming_media_stream(self, state):
+        if not isinstance(state, PlaylistState) or state.is_folder_tab or not state.current_media_path:
+            return False
+
+        should_wrap = str(getattr(state, "repeat_mode", "")).strip().lower() == "all"
+        next_media_path = state.peek_in_playback_order(1, wrap=should_wrap)
+        if not next_media_path:
+            return False
+
+        return self._prefetch_media_stream(next_media_path)
+
     def _can_crossfade_to_media(self, media_path):
         if self._crossfade_duration_ms() <= 0 or self._crossfade_state is not None:
             return False
@@ -209,7 +321,11 @@ class FramePlaybackMixin:
         if self._media_paths_match(current_media_path, media_path):
             return False
 
-        if not is_audio_only_media(current_media_path) or not is_audio_only_media(media_path):
+        if not is_audio_playback_media(current_media_path) or not is_audio_playback_media(media_path):
+            return False
+
+        if self._youtube_music_media_requires_prefetched_stream(media_path):
+            self._prefetch_media_stream(media_path)
             return False
 
         if self.player.get_media() is None or not self.player.is_playing():
@@ -330,9 +446,10 @@ class FramePlaybackMixin:
         if crossfade_state.get("phase") == "pending":
             created_at = crossfade_state.get("created_at")
             if created_at is not None and (time.monotonic() - created_at) > 5.0:
-                self._cancel_crossfade_transition(
-                    stop_incoming=True, stop_outgoing=False, invalidate_requests=False,
-                )
+                if not self._fallback_pending_crossfade_to_regular_playback():
+                    self._cancel_crossfade_transition(
+                        stop_incoming=True, stop_outgoing=False, invalidate_requests=False,
+                    )
                 return
             incoming_player = self._managed_player(crossfade_state.get("incoming_key"))
             if incoming_player is not None and incoming_player.is_playing():
@@ -396,6 +513,31 @@ class FramePlaybackMixin:
         crossfade_state["phase"] = "running"
         crossfade_state["started_at"] = time.monotonic()
         self._apply_crossfade_volumes()
+        self._prefetch_upcoming_media_stream(state)
+        return True
+
+    def _fallback_pending_crossfade_to_regular_playback(self):
+        crossfade_state = getattr(self, "_crossfade_state", None)
+        if not crossfade_state or crossfade_state.get("phase") != "pending":
+            return False
+
+        tab_index = crossfade_state.get("tab_index")
+        media_path = crossfade_state.get("media_path")
+        announce_message = crossfade_state.get("announce_message")
+        state = self._get_playlist_state(tab_index)
+        if not state or state.current_media_path != media_path:
+            return False
+
+        self._cancel_crossfade_transition(
+            stop_incoming=True,
+            stop_outgoing=False,
+            invalidate_requests=True,
+        )
+        self._queue_media_start(
+            media_path,
+            tab_index=tab_index,
+            announce_message=announce_message,
+        )
         return True
 
     def _next_playback_request_serial(self):
@@ -436,6 +578,12 @@ class FramePlaybackMixin:
                     raise RuntimeError("Player do VLC indisponível.")
                 player.stop()
                 player.set_media(media)
+                video_output_handle = request.get("video_output_handle")
+                if sys.platform.startswith("win") and video_output_handle:
+                    try:
+                        player.set_hwnd(video_output_handle)
+                    except Exception:
+                        pass
                 self._set_player_loaded_media_path(player_key, request["media_path"])
                 initial_volume = request.get("initial_volume", self.current_volume)
                 try:
@@ -472,14 +620,28 @@ class FramePlaybackMixin:
         crossfade=False,
     ):
         target_player_key = player_key or self._active_player_key
-        if target_player_key == self._active_player_key:
-            self._bind_player_to_window()
+        target_player = self._managed_player(target_player_key)
+        if (
+            sys.platform.startswith("win")
+            and self._video_output_enabled()
+            and not crossfade
+            and not is_audio_playback_media(media_path)
+            and target_player is not None
+            and (
+                self._player_loaded_media_path(target_player_key)
+                or target_player.get_media() is not None
+            )
+        ):
+            self._recreate_player_slot(target_player_key, index=tab_index)
+
+        self._bind_player_to_window(index=tab_index)
 
         request = {
             "kind": "play",
             "serial": self._next_playback_request_serial(),
             "media_path": media_path,
             "tab_index": tab_index,
+            "video_output_handle": self._video_output_handle(tab_index),
             "announce_message": announce_message,
             "restore_position_ms": restore_position_ms,
             "pause_after_start": pause_after_start,
@@ -489,6 +651,31 @@ class FramePlaybackMixin:
         }
         self._playback_queue.put(request)
         return request
+
+    def _refresh_player_backend_for_video_output_setting(self):
+        self._capture_active_playlist_state()
+        active_index = self._get_active_playlist_index()
+        active_state = self._get_active_playlist_state()
+        current_media_path = getattr(active_state, "current_media_path", None)
+        restore_position_ms = int(getattr(active_state, "last_position_ms", 0) or 0) if active_state else 0
+        pause_after_restore = not bool(getattr(active_state, "was_playing", False)) if active_state else False
+
+        self._cancel_crossfade_transition(stop_incoming=True, stop_outgoing=True, invalidate_requests=True)
+        self._stop_all_players(unload=False)
+        self._reset_player()
+
+        if active_state and active_index != wx.NOT_FOUND and current_media_path:
+            self._queue_media_start(
+                current_media_path,
+                tab_index=active_index,
+                restore_position_ms=restore_position_ms,
+                pause_after_start=pause_after_restore,
+                announce_message="",
+            )
+            return
+
+        self._update_title()
+        self._update_time_bar()
 
     def _finish_media_start(self, request, success, error_message):
         if request.get("serial") != self._playback_request_serial:
@@ -506,6 +693,8 @@ class FramePlaybackMixin:
         if not success:
             self._set_player_loaded_media_path(player_key, None)
             if request.get("crossfade"):
+                if self._fallback_pending_crossfade_to_regular_playback():
+                    return
                 self._cancel_crossfade_transition(stop_incoming=True, stop_outgoing=False, invalidate_requests=False)
             if error_message:
                 self._announce(f"Não foi possível iniciar a mídia: {error_message}.")
@@ -543,6 +732,7 @@ class FramePlaybackMixin:
         self._update_title()
         self._update_time_bar()
         self._refresh_playlist_browser()
+        self._prefetch_upcoming_media_stream(state)
 
         announce_message = request.get("announce_message")
         if announce_message is not None:
@@ -618,21 +808,25 @@ class FramePlaybackMixin:
             self._reset_player()
         self._update_time_bar()
 
-    def _bind_player_to_window(self):
-        video_panel = self._get_video_panel()
-        if not video_panel:
-            return
-
-        handle = video_panel.GetHandle()
+    def _bind_player_to_window(self, index=None):
+        handle = self._video_output_handle(index)
         if not handle:
             return
 
-        if sys.platform.startswith("win"):
-            self.player.set_hwnd(handle)
-        elif sys.platform.startswith("linux"):
-            self.player.set_xwindow(handle)
-        elif sys.platform == "darwin":
-            self.player.set_nsobject(int(handle))
+        for player_key in getattr(self, "_player_keys", ()): 
+            player = self._managed_player(player_key)
+            if player is None:
+                continue
+
+            try:
+                if sys.platform.startswith("win"):
+                    player.set_hwnd(handle)
+                elif sys.platform.startswith("linux"):
+                    player.set_xwindow(handle)
+                elif sys.platform == "darwin":
+                    player.set_nsobject(int(handle))
+            except Exception:
+                continue
 
     def _load_media(self, media_path):
         player_instance = self._instance_for_player(self._active_player_key)
@@ -659,7 +853,10 @@ class FramePlaybackMixin:
         return self._media_paths_match(media_path, loaded_media_path)
 
     def _resolve_media_path_for_playback(self, media_path):
-        youtube_music_service = getattr(self, "_youtube_music_service", None)
+        if not is_youtube_music_media(media_path):
+            return media_path
+
+        youtube_music_service = self._youtube_music_service_for_playback()
         if youtube_music_service is None:
             return media_path
 

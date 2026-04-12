@@ -1,6 +1,7 @@
 import os
 
 from ..constants import AUDIO_ONLY_EXTENSIONS, SUPPORTED_MEDIA_EXTENSIONS
+from ..youtube_music import is_youtube_music_media
 from .models import FOLDER_ENTRY_DIRECTORY, FOLDER_ENTRY_FILE, FOLDER_ENTRY_PARENT, FolderBrowserEntry
 
 
@@ -10,6 +11,10 @@ def is_supported_media(filename):
 
 def is_audio_only_media(filename):
     return os.path.splitext(str(filename or ""))[1].lower() in AUDIO_ONLY_EXTENSIONS
+
+
+def is_audio_playback_media(filename):
+    return is_audio_only_media(filename) or is_youtube_music_media(filename)
 
 
 def folder_display_name(folder_path):

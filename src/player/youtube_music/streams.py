@@ -3,6 +3,10 @@ import re
 from .playlists import is_youtube_music_media
 
 
+YTDLP_STREAM_SOCKET_TIMEOUT_SECONDS = 10
+YTDLP_STREAM_OPERATION_TIMEOUT_SECONDS = 15
+
+
 def resolve_stream_url(media_path):
     normalized_media_path = str(media_path or "").strip()
     if not is_youtube_music_media(normalized_media_path):
@@ -21,6 +25,7 @@ def resolve_stream_url(media_path):
         "noplaylist": True,
         "skip_download": True,
         "extract_flat": False,
+        "socket_timeout": YTDLP_STREAM_SOCKET_TIMEOUT_SECONDS,
     }
     extractor_profiles = [
         {"extractor_args": {"youtube": {"player_client": ["web_music", "web"]}}},

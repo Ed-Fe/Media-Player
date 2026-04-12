@@ -111,6 +111,25 @@ class FrameEqualizerMixin:
 
         return self._apply_equalizer_state_to_player(self.player, state)
 
+    def _apply_equalizer_state_to_current_playback(self, state=None):
+        applied = self._apply_equalizer_state(state)
+
+        crossfade_state = getattr(self, "_crossfade_state", None)
+        managed_player = getattr(self, "_managed_player", None)
+        if not crossfade_state or not callable(managed_player):
+            return applied
+
+        for player_key in (crossfade_state.get("incoming_key"), crossfade_state.get("outgoing_key")):
+            player = managed_player(player_key)
+            if player is None or player is getattr(self, "player", None):
+                continue
+            applied = self._apply_equalizer_state_to_player(player, state) or applied
+
+        return applied
+
+    def _equalizer_media_tab_count(self):
+        return sum(1 for state in getattr(self, "playlists", []) if isinstance(state, PlaylistState))
+
     def _set_equalizer_for_target_tab(self, *, enabled=None, preset_id=None, announce=True):
         state = self._get_equalizer_target_state()
         if not state:
@@ -130,7 +149,7 @@ class FrameEqualizerMixin:
         elif preset_id is not None:
             state.equalizer_enabled = True
 
-        applied = self._apply_equalizer_state(state)
+        applied = self._apply_equalizer_state_to_current_playback(state)
         self._refresh_equalizer_screen()
         if not announce:
             return applied
@@ -165,6 +184,7 @@ class FrameEqualizerMixin:
             parent,
             on_toggle_enabled=self.on_toggle_equalizer_enabled,
             on_select_preset=self.on_select_equalizer_preset,
+            on_apply_to_all_tabs=self.on_apply_equalizer_to_all_tabs,
             on_create_preset=self.on_create_equalizer_preset,
             on_edit_preset=self.on_edit_equalizer_preset,
             on_duplicate_preset=self.on_duplicate_equalizer_preset,
@@ -236,6 +256,7 @@ class FrameEqualizerMixin:
             selected_preset_id=state.equalizer_preset_id if state else DEFAULT_EQUALIZER_PRESET_ID,
             selected_preset=selected_preset,
             band_frequencies_hz=self._equalizer_band_frequencies(),
+            can_apply_to_all=bool(state and self._equalizer_media_tab_count() > 1),
         )
 
     def _ensure_equalizer_available(self):
@@ -263,6 +284,40 @@ class FrameEqualizerMixin:
 
     def on_select_equalizer_preset(self, preset_id):
         self._set_equalizer_for_target_tab(preset_id=preset_id, announce=True)
+
+    def on_apply_equalizer_to_all_tabs(self):
+        if not self._ensure_equalizer_available():
+            return
+
+        state = self._get_equalizer_target_state()
+        if not state:
+            self._announce("Nenhuma aba de mídia ativa para copiar o equalizador.")
+            return
+
+        media_tab_count = self._equalizer_media_tab_count()
+        if media_tab_count <= 1:
+            self._announce("Abra pelo menos duas abas de mídia para aplicar o equalizador em lote.")
+            return
+
+        preset = self._get_equalizer_preset(state.equalizer_preset_id)
+        if preset is None:
+            self._announce("Nenhum preset de equalizador está disponível.")
+            return
+
+        for candidate_state in self.playlists:
+            if not isinstance(candidate_state, PlaylistState):
+                continue
+            candidate_state.equalizer_enabled = bool(state.equalizer_enabled)
+            candidate_state.equalizer_preset_id = preset.preset_id
+
+        self._apply_equalizer_state_to_current_playback(state)
+        self._refresh_equalizer_screen()
+
+        if state.equalizer_enabled:
+            self._announce(f"Equalizador {preset.name} aplicado em {media_tab_count} abas de mídia.")
+            return
+
+        self._announce(f"Equalizador desativado em {media_tab_count} abas de mídia.")
 
     def _validate_equalizer_preset_name(self, name, *, excluding_preset_id=None):
         normalized_name = str(name or "").strip().casefold()
@@ -448,7 +503,7 @@ class FrameEqualizerMixin:
             preset_id=preset.preset_id,
         )
         self._replace_custom_equalizer_preset(updated_preset, refresh=False)
-        self._apply_equalizer_state(self._get_equalizer_target_state())
+        self._apply_equalizer_state_to_current_playback(self._get_equalizer_target_state())
         self._refresh_equalizer_screen()
         self._announce(f"Preset atualizado: {updated_preset.name}.")
 
@@ -525,6 +580,6 @@ class FrameEqualizerMixin:
                 state.equalizer_preset_id = fallback_preset_id
 
         self._save_settings()
-        self._apply_equalizer_state(self._get_equalizer_target_state())
+        self._apply_equalizer_state_to_current_playback(self._get_equalizer_target_state())
         self._refresh_equalizer_screen()
         self._announce(f"Preset excluído: {preset.name}.")

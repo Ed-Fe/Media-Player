@@ -2,7 +2,7 @@ import wx
 
 from ..accessibility import attach_named_accessible
 from ..constants import CROSSFADE_TIMER_INTERVAL_MS, PROGRESS_GAUGE_RANGE, PROGRESS_TIMER_INTERVAL_MS
-from ..library import PlaylistBrowserPanel
+from ..library import PlaylistBrowserPanel, is_audio_playback_media
 
 
 class FrameUIMixin:
@@ -22,6 +22,25 @@ class FrameUIMixin:
             "F6 alterna entre itens e player\n"
             "F1 mostra a ajuda rápida de atalhos"
         )
+
+    def _player_audio_only_text(self):
+        return (
+            "Saída de vídeo desativada\n\n"
+            "Esta mídia está tocando só o áudio.\n"
+            "Abra Preferências > Reprodução para reativar o vídeo quando quiser."
+        )
+
+    def _player_overlay_text_for_state(self, state):
+        if not state or not getattr(state, "current_media_path", None):
+            return self._player_overlay_hint_text()
+
+        if (
+            getattr(self.settings, "disable_video_output", False)
+            and not is_audio_playback_media(state.current_media_path)
+        ):
+            return self._player_audio_only_text()
+
+        return ""
 
     def _keyboard_help_text(self):
         return (
@@ -75,9 +94,12 @@ class FrameUIMixin:
                 continue
 
             playlist_state = self._get_playlist_state(index)
-            show_overlay = bool(playlist_state and not playlist_state.current_media_path)
-            needs_layout = video_hint_overlay.IsShown() != show_overlay
-            if needs_layout:
+            overlay_text = self._player_overlay_text_for_state(playlist_state)
+            show_overlay = bool(overlay_text)
+            if video_hint_overlay.GetLabel() != overlay_text:
+                video_hint_overlay.SetLabel(overlay_text)
+                page.video_hint_wrap_width = None
+            if video_hint_overlay.IsShown() != show_overlay:
                 video_hint_overlay.Show(show_overlay)
 
             if show_overlay:
@@ -85,10 +107,28 @@ class FrameUIMixin:
                 if getattr(page, "video_hint_wrap_width", None) != wrap_width:
                     video_hint_overlay.Wrap(wrap_width)
                     page.video_hint_wrap_width = wrap_width
-                    needs_layout = True
+            self._layout_video_page(page)
 
-            if needs_layout:
-                video_panel.Layout()
+    def _layout_video_page(self, page):
+        video_panel = getattr(page, "video_panel", None)
+        video_surface = getattr(page, "video_surface", None)
+        video_hint_overlay = getattr(page, "video_hint_overlay", None)
+        if not video_panel:
+            return
+
+        if video_surface is not None:
+            panel_size = video_panel.GetClientSize()
+            video_surface.SetSize(0, 0, panel_size.Width, panel_size.Height)
+
+        if video_hint_overlay is None or not video_hint_overlay.IsShown():
+            return
+
+        panel_size = video_panel.GetClientSize()
+        overlay_size = video_hint_overlay.GetBestSize()
+        position_x = max(24, (panel_size.Width - overlay_size.Width) // 2)
+        position_y = max(24, (panel_size.Height - overlay_size.Height) // 2)
+        video_hint_overlay.SetPosition((position_x, position_y))
+        video_hint_overlay.Raise()
 
     def _on_progress_panel_size(self, event):
         self._refresh_shortcuts_hint_layout()
@@ -349,11 +389,17 @@ class FrameUIMixin:
             on_toggle_navigation_mode=self.on_toggle_playlist_browser,
         )
 
-        video_panel = wx.Panel(page)
+        video_panel = wx.Panel(page, style=wx.TAB_TRAVERSAL | wx.CLIP_CHILDREN)
         video_panel.SetName("Painel de vídeo")
         video_panel.SetBackgroundColour(wx.Colour(0, 0, 0))
         video_panel.Bind(wx.EVT_SIZE, self.on_video_panel_resize)
         video_panel.Bind(wx.EVT_SET_FOCUS, self.on_video_panel_focus)
+
+        video_surface = wx.Window(video_panel, style=wx.NO_BORDER | wx.WANTS_CHARS)
+        video_surface.SetName("Superfície de vídeo")
+        video_surface.SetBackgroundColour(wx.Colour(0, 0, 0))
+        video_surface.Bind(wx.EVT_SIZE, self.on_video_panel_resize)
+        video_surface.Bind(wx.EVT_SET_FOCUS, self.on_video_panel_focus)
 
         video_hint_overlay = wx.StaticText(
             video_panel,
@@ -367,9 +413,7 @@ class FrameUIMixin:
         video_hint_overlay.SetForegroundColour(wx.Colour(235, 235, 235))
 
         video_panel_sizer = wx.BoxSizer(wx.VERTICAL)
-        video_panel_sizer.AddStretchSpacer()
-        video_panel_sizer.Add(video_hint_overlay, 0, wx.LEFT | wx.RIGHT | wx.ALIGN_CENTER_HORIZONTAL, 24)
-        video_panel_sizer.AddStretchSpacer()
+        video_panel_sizer.Add(video_surface, 1, wx.EXPAND)
         video_panel.SetSizer(video_panel_sizer)
 
         root_sizer.Add(browser_panel, 0, wx.EXPAND | wx.ALL, 4)
@@ -377,6 +421,8 @@ class FrameUIMixin:
         page.SetSizer(root_sizer)
         page.browser_panel = browser_panel
         page.video_panel = video_panel
+        page.video_surface = video_surface
         page.video_hint_overlay = video_hint_overlay
         page.video_hint_wrap_width = None
+        self._layout_video_page(page)
         return page

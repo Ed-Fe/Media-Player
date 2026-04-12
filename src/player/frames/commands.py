@@ -382,6 +382,9 @@ class FrameCommandMixin:
             self.current_volume = self.settings.default_volume
             self._apply_current_volume()
 
+        if self.settings.disable_video_output != previous_settings.disable_video_output:
+            self._refresh_player_backend_for_video_output_setting()
+
         self._announce("Preferências salvas.")
 
     def on_show_keyboard_help(self, _event):
