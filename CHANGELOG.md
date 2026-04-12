@@ -11,12 +11,14 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 - Novo diálogo **Abrir mídia, playlist ou pasta** para abrir arquivos de mídia, playlists `.m3u/.m3u8`, links de playlist e pastas a partir de um único fluxo.
 - Suporte a abrir playlists remotas `.m3u/.m3u8` por URL, preservando entradas remotas e resolvendo caminhos relativos a partir da origem da playlist.
 - Configuração de **crossfade** nas Preferências, com suporte a sobrepor automaticamente faixas de áudio e opção `0` para desativar o recurso.
+- Suporte inicial ao **YouTube Music** com autenticação por navegador, importação de `browser.json`/JSON de cookies/`cookies.txt`, abertura de playlists e mixes da conta e resolução de streams com `yt-dlp`.
 
 ### Changed
 - O menu **Arquivo** passou a concentrar a abertura geral em uma única ação, mantendo atalhos específicos para abrir arquivos locais e pastas no navegador.
 - O atalho `Ctrl+O` agora aceita tanto arquivos de mídia quanto uma playlist local `.m3u/.m3u8`, usando o mesmo conjunto de tipos do seletor **Arquivo...** do diálogo unificado.
 - Pastas locais agora podem ser abertas tanto no navegador quanto como playlists estáticas carregadas de forma assíncrona.
 - A reprodução passou a usar players VLC dedicados por faixa no crossfade, com tratamento específico para o backend de áudio do Windows e melhor folga de inicialização entre músicas.
+- O submenu **YouTube Music** passou a atualizar o estado da conexão, permitir desconectar a conta salva e carregar playlists/mixes sem bloquear a interface.
 
 ### Fixed
 - Transições de áudio com menos cortes e sem retorno repentino de volume no fim do crossfade ao avançar entre faixas compatíveis.

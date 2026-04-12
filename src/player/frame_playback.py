@@ -10,6 +10,7 @@ import wx
 
 from .constants import LOCAL_FILE_CACHING_MS, PROGRESS_GAUGE_RANGE, RESTORE_DELAY_MS
 from .media import folder_display_name, is_audio_only_media
+from .playlists import PlaylistState
 
 
 class FramePlaybackMixin:
@@ -429,7 +430,8 @@ class FramePlaybackMixin:
             try:
                 if player_instance is None:
                     raise RuntimeError("Instância do VLC indisponível.")
-                media = player_instance.media_new(request["media_path"])
+                playback_media_path = self._resolve_media_path_for_playback(request["media_path"])
+                media = player_instance.media_new(playback_media_path)
                 if player is None:
                     raise RuntimeError("Player do VLC indisponível.")
                 player.stop()
@@ -656,9 +658,47 @@ class FramePlaybackMixin:
 
         return self._media_paths_match(media_path, loaded_media_path)
 
+    def _resolve_media_path_for_playback(self, media_path):
+        youtube_music_service = getattr(self, "_youtube_music_service", None)
+        if youtube_music_service is None:
+            return media_path
+
+        return youtube_music_service.resolve_stream_url(media_path)
+
+    def _media_label_from_playlist_state(self, state, media_path):
+        if not isinstance(state, PlaylistState):
+            return None
+
+        media_index = state.index_of_item(media_path)
+        if media_index is None:
+            return None
+
+        if 0 <= media_index < len(state.browser_item_labels):
+            label = str(state.browser_item_labels[media_index] or "").strip()
+            if label:
+                return label
+
+        return None
+
     def _media_label(self, media_path):
         if not media_path:
             return "Sem mídia"
+
+        checked_states = []
+        current_state = self._get_playlist_state()
+        if current_state is not None:
+            checked_states.append(current_state)
+        active_state = self._get_active_playlist_state()
+        if active_state is not None and active_state is not current_state:
+            checked_states.append(active_state)
+        for state in getattr(self, "playlists", []):
+            if state not in checked_states:
+                checked_states.append(state)
+
+        for state in checked_states:
+            playlist_label = self._media_label_from_playlist_state(state, media_path)
+            if playlist_label:
+                return playlist_label
 
         normalized_path = str(media_path).rstrip("\\/")
         media_name = os.path.basename(normalized_path)

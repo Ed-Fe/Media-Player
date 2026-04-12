@@ -651,6 +651,57 @@ class FrameLibraryMixin:
         self._refresh_playlist_browser()
         return target_index
 
+    def _open_prepared_media_playlist(
+        self,
+        items,
+        title,
+        *,
+        browser_item_labels=None,
+        source_path=None,
+        announce_message=None,
+    ):
+        normalized_items = list(items or [])
+        if not normalized_items:
+            return wx.NOT_FOUND
+
+        if browser_item_labels is None:
+            normalized_browser_labels = [os.path.basename(path) or path for path in normalized_items]
+        else:
+            normalized_browser_labels = list(browser_item_labels)
+
+        if len(normalized_browser_labels) != len(normalized_items):
+            normalized_browser_labels = [os.path.basename(path) or path for path in normalized_items]
+
+        current_index = self.notebook.GetSelection()
+        current_tab = self._get_tab_state(current_index)
+        state = current_tab if isinstance(current_tab, PlaylistState) else self._get_active_playlist_state()
+
+        if isinstance(current_tab, PlaylistState) and current_tab.is_empty:
+            target_index = current_index
+            state = current_tab
+        elif state and state.is_empty:
+            target_index = self._get_active_playlist_index()
+        else:
+            target_index = self._create_empty_playlist_tab(select=False)
+            state = self._get_playlist_state(target_index)
+
+        state.finish_library_load()
+        state.clear_folder_location()
+        state.title = title
+        state.source_path = source_path
+        state.set_items_prepared(
+            normalized_items,
+            {item: index for index, item in enumerate(normalized_items)},
+            normalized_browser_labels,
+            start_index=0,
+        )
+
+        self.notebook.SetPageText(target_index, title)
+        self._select_tab(target_index, announce=False)
+        self._refresh_playlist_browser()
+        self._play_media(index=target_index, announce_message=announce_message)
+        return target_index
+
     def _activate_tab(self, index, announce=True):
         tab_state = self._get_tab_state(index)
         if not tab_state:

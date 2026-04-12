@@ -46,10 +46,12 @@ class VLCPlayerFrame(
         self._build_menu_bar()
         self._build_ui()
         self._bind_events()
+        self._refresh_youtube_music_menu_state()
 
         self.Centre()
         self.Show()
         wx.CallAfter(self._initialize_player_state)
+        wx.CallAfter(self._verify_youtube_music_connection)
         wx.CallAfter(self._prime_equalizer_ui)
         wx.CallAfter(self._schedule_startup_update_check)
 
