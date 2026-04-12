@@ -93,7 +93,9 @@ For a repeatable end-to-end updater test flow, see `docs/update-testing.md`.
 - `Ctrl+PageUp` / `Ctrl+PageDown`: previous / next track
 - `Ctrl+Shift+E`: open the equalizer tab for the active media tab
 - `Ctrl+Tab` / `Ctrl+Shift+Tab`: next / previous tab
-- `Ctrl+Shift+P`: open playlist
+- `Ctrl+O`: open media files directly or a local `.m3u` / `.m3u8` playlist
+- `Ctrl+Shift+O`: open a folder directly in the folder browser
+- `Ctrl+Alt+O`: open media, playlist, or folder in the unified dialog
 - `Ctrl+Shift+S`: save current playlist
 - `Ctrl+,`: open preferences
 - `F1`: open quick keyboard help

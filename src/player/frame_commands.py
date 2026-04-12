@@ -2,25 +2,28 @@ import os
 
 import wx
 
-from .constants import PLAYLIST_WILDCARD, SUPPORTED_MEDIA_EXTENSIONS
+from .constants import PLAYLIST_WILDCARD
 from .equalizer_panel import EqualizerTabPanel
+from .media import is_supported_media
+from .open_source_dialog import (
+    OPEN_MODE_FOLDER_BROWSER,
+    OPEN_MODE_PLAYLIST,
+    OPEN_SOURCE_DIALOG_TITLE,
+    OpenSourceDialog,
+    build_supported_media_wildcard,
+)
 from .playlists import ScreenTabState
-from .playlist_io import playlist_display_name, save_playlist
+from .playlist_io import is_playlist_source, is_remote_media_path, playlist_display_name, save_playlist
 from .preferences_dialog import PreferencesDialog
 
 
 class FrameCommandMixin:
     def on_open(self, _event):
-        wildcard = (
-            "Mídia suportada|"
-            + ";".join(f"*{ext}" for ext in sorted(SUPPORTED_MEDIA_EXTENSIONS))
-            + "|Todos os arquivos|*.*"
-        )
         with wx.FileDialog(
             self,
-            "Escolha um ou mais arquivos de mídia",
+            "Escolha um ou mais arquivos de mídia ou uma playlist",
             defaultDir=self._default_dialog_directory(),
-            wildcard=wildcard,
+            wildcard=build_supported_media_wildcard(include_playlists=True),
             style=wx.FD_OPEN | wx.FD_FILE_MUST_EXIST | wx.FD_MULTIPLE,
         ) as dialog:
             if dialog.ShowModal() == wx.ID_CANCEL:
@@ -30,7 +33,7 @@ class FrameCommandMixin:
         if not paths:
             return
 
-        self._open_media_paths(paths)
+        self._open_selected_files(paths, dialog_title="Abrir arquivos")
 
     def on_open_folder(self, _event):
         with wx.DirDialog(
@@ -45,19 +48,149 @@ class FrameCommandMixin:
 
         self._open_folder_path(folder_path)
 
-    def on_open_playlist(self, _event):
-        with wx.FileDialog(
-            self,
-            "Abrir playlist",
-            defaultDir=self._default_dialog_directory(),
-            wildcard=PLAYLIST_WILDCARD,
-            style=wx.FD_OPEN | wx.FD_FILE_MUST_EXIST,
-        ) as dialog:
-            if dialog.ShowModal() == wx.ID_CANCEL:
-                return
-            playlist_path = dialog.GetPath()
+    def on_open_source(self, _event):
+        self._show_open_source_dialog(initial_mode=OPEN_MODE_PLAYLIST)
 
-        self._open_playlist_path(playlist_path)
+    def _show_open_source_dialog(self, initial_source="", initial_mode=OPEN_MODE_PLAYLIST):
+        source_value = initial_source
+        open_mode = initial_mode
+
+        while True:
+            dialog = OpenSourceDialog(
+                self,
+                default_dir=self._default_dialog_directory(),
+                initial_source=source_value,
+                initial_mode=open_mode,
+            )
+            try:
+                if dialog.ShowModal() == wx.ID_CANCEL:
+                    return
+                source_value = dialog.get_source()
+                open_mode = dialog.get_open_mode()
+            finally:
+                dialog.Destroy()
+
+            if self._open_source_from_dialog(source_value, open_mode):
+                return
+
+    def _open_selected_files(self, paths, dialog_title="Abrir arquivos"):
+        media_paths = []
+        playlist_paths = []
+
+        for path in paths:
+            normalized_path = self._normalize_path(path)
+            if not normalized_path or not os.path.isfile(normalized_path):
+                continue
+
+            if is_playlist_source(normalized_path):
+                playlist_paths.append(normalized_path)
+                continue
+
+            if is_supported_media(normalized_path):
+                media_paths.append(normalized_path)
+
+        if playlist_paths and media_paths:
+            wx.MessageBox(
+                "Selecione uma única playlist ou apenas arquivos de mídia.",
+                dialog_title,
+                wx.OK | wx.ICON_INFORMATION,
+                self,
+            )
+            return False
+
+        if len(playlist_paths) > 1:
+            wx.MessageBox(
+                "Selecione apenas uma playlist por vez.",
+                dialog_title,
+                wx.OK | wx.ICON_INFORMATION,
+                self,
+            )
+            return False
+
+        if playlist_paths:
+            return self._open_playlist_source(playlist_paths[0])
+
+        if media_paths:
+            return self._open_media_paths(media_paths)
+
+        wx.MessageBox(
+            "Nenhum arquivo de mídia ou playlist compatível foi selecionado.",
+            dialog_title,
+            wx.OK | wx.ICON_WARNING,
+            self,
+        )
+        return False
+
+    def _open_source_from_dialog(self, source_value, open_mode):
+        normalized_source = str(source_value or "").strip()
+        if not normalized_source:
+            wx.MessageBox(
+                "Informe um caminho local ou um link .m3u/.m3u8.",
+                OPEN_SOURCE_DIALOG_TITLE,
+                wx.OK | wx.ICON_INFORMATION,
+                self,
+            )
+            return False
+
+        normalized_local_source = ""
+        if not is_remote_media_path(normalized_source):
+            normalized_local_source = self._normalize_path(normalized_source)
+
+        if open_mode == OPEN_MODE_FOLDER_BROWSER:
+            if normalized_local_source and self._open_folder_path(normalized_local_source):
+                return True
+
+            wx.MessageBox(
+                "Para abrir no navegador, informe uma pasta local válida.",
+                OPEN_SOURCE_DIALOG_TITLE,
+                wx.OK | wx.ICON_WARNING,
+                self,
+            )
+            return False
+
+        if normalized_local_source and os.path.isdir(normalized_local_source):
+            if self._open_folder_as_playlist(normalized_local_source):
+                return True
+
+            wx.MessageBox(
+                "Não foi possível abrir a pasta selecionada como playlist.",
+                OPEN_SOURCE_DIALOG_TITLE,
+                wx.OK | wx.ICON_ERROR,
+                self,
+            )
+            return False
+
+        if is_playlist_source(normalized_source):
+            if self._open_playlist_source(normalized_source):
+                return True
+
+            wx.MessageBox(
+                "Não foi possível abrir a playlist ou link informado.",
+                OPEN_SOURCE_DIALOG_TITLE,
+                wx.OK | wx.ICON_ERROR,
+                self,
+            )
+            return False
+
+        if normalized_local_source and os.path.isfile(normalized_local_source) and is_supported_media(normalized_local_source):
+            if self._open_media_paths([normalized_local_source]):
+                return True
+
+            wx.MessageBox(
+                "Não foi possível abrir o arquivo de mídia selecionado.",
+                OPEN_SOURCE_DIALOG_TITLE,
+                wx.OK | wx.ICON_ERROR,
+                self,
+            )
+            return False
+
+        message = (
+            "Links remotos aceitos aqui precisam apontar para arquivos .m3u ou .m3u8."
+            if is_remote_media_path(normalized_source)
+            else "Informe uma pasta local, um arquivo de mídia ou uma playlist .m3u/.m3u8 válida."
+        )
+        wx.MessageBox(message, OPEN_SOURCE_DIALOG_TITLE, wx.OK | wx.ICON_WARNING, self)
+        return False
 
     def on_save_playlist(self, _event):
         state = self._get_playlist_state()
@@ -394,8 +527,8 @@ class FrameCommandMixin:
             self.on_new_playlist(None)
             return
 
-        if event.ControlDown() and event.ShiftDown() and key_code in (ord("P"), ord("p")):
-            self.on_open_playlist(None)
+        if event.ControlDown() and event.AltDown() and not event.ShiftDown() and key_code in (ord("O"), ord("o")):
+            self.on_open_source(None)
             return
 
         if event.ControlDown() and event.ShiftDown() and key_code in (ord("E"), ord("e")):

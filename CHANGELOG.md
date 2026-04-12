@@ -7,6 +7,15 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ## [Unreleased]
 
+### Added
+- Novo diálogo **Abrir mídia, playlist ou pasta** para abrir arquivos de mídia, playlists `.m3u/.m3u8`, links de playlist e pastas a partir de um único fluxo.
+- Suporte a abrir playlists remotas `.m3u/.m3u8` por URL, preservando entradas remotas e resolvendo caminhos relativos a partir da origem da playlist.
+
+### Changed
+- O menu **Arquivo** passou a concentrar a abertura geral em uma única ação, mantendo atalhos específicos para abrir arquivos locais e pastas no navegador.
+- O atalho `Ctrl+O` agora aceita tanto arquivos de mídia quanto uma playlist local `.m3u/.m3u8`, usando o mesmo conjunto de tipos do seletor **Arquivo...** do diálogo unificado.
+- Pastas locais agora podem ser abertas tanto no navegador quanto como playlists estáticas carregadas de forma assíncrona.
+
 ## [0.3.0] - 2026-04-12
 
 ### Added

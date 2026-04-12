@@ -8,14 +8,15 @@ from .playlist_browser import PlaylistBrowserPanel
 class FrameUIMixin:
     def _primary_shortcuts_hint_text(self):
         return (
-            "Atalhos principais: Ctrl+O abrir arquivos · Ctrl+Shift+O abrir pasta · "
+            "Atalhos principais: Ctrl+Alt+O abrir mídia, playlist ou pasta · Ctrl+O abrir arquivos ou playlist · Ctrl+Shift+O abrir pasta · "
             "Espaço reproduzir/pausar · ←/→ buscar · ↑/↓ volume · F6 itens/player · F1 ajuda"
         )
 
     def _player_overlay_hint_text(self):
         return (
             "Sem mídia carregada\n\n"
-            "Ctrl+O abre arquivos\n"
+            "Ctrl+Alt+O abre mídia, playlist ou pasta\n"
+            "Ctrl+O abre arquivos ou playlist\n"
             "Ctrl+Shift+O abre uma pasta no navegador\n"
             "Espaço reproduz ou pausa\n"
             "F6 alterna entre itens e player\n"
@@ -26,9 +27,9 @@ class FrameUIMixin:
         return (
             "Ajuda rápida de atalhos\n\n"
             "Arquivos e playlists\n"
-            "Ctrl+O — Abrir arquivos de mídia\n"
+            "Ctrl+Alt+O — Abrir mídia, playlist ou pasta\n"
+            "Ctrl+O — Abrir arquivos de mídia ou uma playlist local\n"
             "Ctrl+Shift+O — Abrir pasta no navegador\n"
-            "Ctrl+Shift+P — Abrir playlist\n"
             "Ctrl+Shift+S — Salvar playlist atual\n"
             "Ctrl+T — Nova playlist\n"
             "Ctrl+W — Fechar mídia atual ou aba vazia\n"
@@ -135,7 +136,7 @@ class FrameUIMixin:
         self.menu_new_playlist_id = wx.NewIdRef()
         self.menu_open_file_id = wx.ID_OPEN
         self.menu_open_folder_id = wx.NewIdRef()
-        self.menu_open_playlist_id = wx.NewIdRef()
+        self.menu_open_source_id = wx.NewIdRef()
         self.menu_save_playlist_id = wx.NewIdRef()
         self.recent_menu = wx.Menu()
         self.recent_files_menu = wx.Menu()
@@ -143,9 +144,7 @@ class FrameUIMixin:
         self.recent_playlists_menu = wx.Menu()
 
         file_menu.Append(self.menu_new_playlist_id, "&Nova Playlist\tCtrl+T")
-        file_menu.Append(self.menu_open_file_id, "Abrir &Arquivos\tCtrl+O")
-        file_menu.Append(self.menu_open_folder_id, "Abrir &Pasta no Navegador\tCtrl+Shift+O")
-        file_menu.Append(self.menu_open_playlist_id, "Abrir P&laylist\tCtrl+Shift+P")
+        file_menu.Append(self.menu_open_source_id, "Abrir &Mídia, Playlist ou Pasta...\tCtrl+Alt+O")
         file_menu.Append(self.menu_save_playlist_id, "Salvar Playli&st\tCtrl+Shift+S")
         self.recent_menu.AppendSubMenu(self.recent_files_menu, "Arquivos recentes")
         self.recent_menu.AppendSubMenu(self.recent_folders_menu, "Pastas recentes")
@@ -281,10 +280,19 @@ class FrameUIMixin:
         self._refresh_shortcuts_hint_layout()
 
     def _bind_events(self):
+        accelerators = wx.AcceleratorTable(
+            [
+                (wx.ACCEL_CTRL, ord("O"), self.menu_open_file_id),
+                (wx.ACCEL_CTRL | wx.ACCEL_SHIFT, ord("O"), int(self.menu_open_folder_id)),
+                (wx.ACCEL_CTRL | wx.ACCEL_ALT, ord("O"), int(self.menu_open_source_id)),
+            ]
+        )
+        self.SetAcceleratorTable(accelerators)
+
         self.Bind(wx.EVT_MENU, self.on_new_playlist, id=self.menu_new_playlist_id)
         self.Bind(wx.EVT_MENU, self.on_open, id=self.menu_open_file_id)
         self.Bind(wx.EVT_MENU, self.on_open_folder, id=self.menu_open_folder_id)
-        self.Bind(wx.EVT_MENU, self.on_open_playlist, id=self.menu_open_playlist_id)
+        self.Bind(wx.EVT_MENU, self.on_open_source, id=self.menu_open_source_id)
         self.Bind(wx.EVT_MENU, self.on_save_playlist, id=self.menu_save_playlist_id)
         self.Bind(wx.EVT_MENU, self.on_previous_track, id=self.menu_previous_track_id)
         self.Bind(wx.EVT_MENU, self.on_play_pause, id=self.menu_play_pause_id)
