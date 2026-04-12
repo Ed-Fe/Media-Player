@@ -7,6 +7,8 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-04-12
+
 ### Added
 - Atalho `Ctrl+Shift+W` para fechar a aba ou playlist atual diretamente.
 - Navegação por digitação de letras e números no navegador de itens para localizar arquivos e faixas mais rápido.
