@@ -111,18 +111,24 @@ For a repeatable end-to-end updater test flow, see `docs/update-testing.md`.
 
 - `src/main.py` — application entry point
 - `src/player/app.py` — wx application bootstrap
-- `src/player/frame.py` — main window coordinator
-- `src/player/frame_ui.py` — menus, layout, and UI bindings
-- `src/player/frame_commands.py` — event handlers and shortcuts
-- `src/player/frame_playback.py` — VLC playback logic
-- `src/player/frame_library.py` — tabs, playlists, and folder navigation
-- `src/player/frame_session.py` — session capture and restore
-- `src/player/frame_recents.py` — recent items and path helpers
-- `src/player/playlists.py` — playlist state and tab naming helpers
-- `src/player/playlist_io.py` — `.m3u` / `.m3u8` load and save helpers
-- `src/player/playlist_browser.py` — side panel for playlist and folder navigation
-- `src/player/preferences_dialog.py` — preferences UI
-- `src/player/settings.py` — persistent user settings
+- `src/player/frames/base.py` — main window coordinator and mixin composition
+- `src/player/frames/ui.py` — menus, layout, and UI bindings
+- `src/player/frames/commands.py` — event handlers, dialogs, and shortcuts
+- `src/player/frames/playback.py` — VLC playback logic
+- `src/player/frames/library.py` — library mixin composition
+- `src/player/frames/library_tabs.py` — tab state, selection, and ordering behavior
+- `src/player/frames/library_loader.py` — background loading for folders and playlists
+- `src/player/frames/library_navigation.py` — folder navigation and browser refresh flows
+- `src/player/frames/session.py` — session capture and restore
+- `src/player/frames/recents.py` — recent items and path helpers
+- `src/player/playlists/models.py` — playlist state and playback order helpers
+- `src/player/playlists/titles.py` — playlist and folder tab naming helpers
+- `src/player/library/media_scan.py` — supported media checks and folder scanning helpers
+- `src/player/library/playlist_io.py` — `.m3u` / `.m3u8` load and save helpers
+- `src/player/library/browser.py` — side panel for playlist and folder navigation
+- `src/player/preferences/dialog.py` — preferences UI
+- `src/player/preferences/models.py` — persistent user settings model
+- `src/player/preferences/storage.py` — persistent user settings storage
 - `src/player/session.py` — session persistence
 - `src/player/accessibility.py` — screen reader helpers
 

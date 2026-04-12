@@ -19,9 +19,14 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 - Pastas locais agora podem ser abertas tanto no navegador quanto como playlists estáticas carregadas de forma assíncrona.
 - A reprodução passou a usar players VLC dedicados por faixa no crossfade, com tratamento específico para o backend de áudio do Windows e melhor folga de inicialização entre músicas.
 - O submenu **YouTube Music** passou a atualizar o estado da conexão, permitir desconectar a conta salva e carregar playlists/mixes sem bloquear a interface.
+- O código do player foi reorganizado por responsabilidades em pacotes como `frames/`, `library/`, `playlists/`, `preferences/`, `equalizer/`, `update/` e `youtube_music/`, com divisão adicional dos fluxos de biblioteca em mixins menores.
 
 ### Fixed
 - Transições de áudio com menos cortes e sem retorno repentino de volume no fim do crossfade ao avançar entre faixas compatíveis.
+
+### Notes
+- Esta versão inclui uma refatoração estrutural grande. Apesar da validação rápida e das verificações feitas durante o desenvolvimento, ainda podem aparecer problemas ou regressões em fluxos menos exercitados.
+- Se você encontrar qualquer comportamento estranho, travamento, atalho quebrado, regressão de acessibilidade ou falha ao abrir mídia/playlist/pasta, por favor reporte um bug com o máximo de detalhes possível.
 
 ## [0.3.0] - 2026-04-12
 

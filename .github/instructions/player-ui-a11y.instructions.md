@@ -2,9 +2,12 @@
 description: "Use when editing wxPython UI, dialogs, menus, keyboard shortcuts, focus handling, playlist browser, or screen reader accessibility in the Media Player project."
 name: "Player UI Accessibility"
 applyTo:
-  - "src/player/frame.py"
-  - "src/player/preferences_dialog.py"
-  - "src/player/playlist_browser.py"
+  - "src/player/frames/*.py"
+  - "src/player/youtube_music/dialog.py"
+  - "src/player/preferences/*.py"
+  - "src/player/equalizer/dialog.py"
+  - "src/player/equalizer/panel.py"
+  - "src/player/library/*.py"
   - "src/player/accessibility.py"
 ---
 # Player UI and Accessibility Guidelines

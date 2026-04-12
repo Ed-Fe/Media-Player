@@ -1,6 +1,6 @@
 import wx
 
-from .frame import VLCPlayerFrame
+from .frames import VLCPlayerFrame
 
 
 def main():
