@@ -255,6 +255,12 @@ class FramePlaybackMixin:
 
         return max(300, min(1200, duration_ms // 2))
 
+    def _crossfade_pending_timeout_seconds(self, media_path=None, *, outgoing_ended=False):
+        if is_youtube_music_media(media_path):
+            return 20.0 if outgoing_ended else 15.0
+
+        return 5.0
+
     def _normalize_media_comparison_path(self, media_path):
         normalized_path = str(media_path or "").strip()
         if not normalized_path:
@@ -326,7 +332,6 @@ class FramePlaybackMixin:
 
         if self._youtube_music_media_requires_prefetched_stream(media_path):
             self._prefetch_media_stream(media_path)
-            return False
 
         if self.player.get_media() is None or not self.player.is_playing():
             return False
@@ -366,6 +371,7 @@ class FramePlaybackMixin:
             "created_at": time.monotonic(),
             "started_at": None,
             "outgoing_ended": False,
+            "pending_timeout_seconds": self._crossfade_pending_timeout_seconds(media_path),
         }
         return True
 
@@ -445,7 +451,26 @@ class FramePlaybackMixin:
 
         if crossfade_state.get("phase") == "pending":
             created_at = crossfade_state.get("created_at")
-            if created_at is not None and (time.monotonic() - created_at) > 5.0:
+            pending_timeout_seconds = float(
+                crossfade_state.get(
+                    "pending_timeout_seconds",
+                    self._crossfade_pending_timeout_seconds(
+                        crossfade_state.get("media_path"),
+                        outgoing_ended=bool(crossfade_state.get("outgoing_ended")),
+                    ),
+                )
+            )
+            if crossfade_state.get("outgoing_ended"):
+                pending_timeout_seconds = max(
+                    pending_timeout_seconds,
+                    self._crossfade_pending_timeout_seconds(
+                        crossfade_state.get("media_path"),
+                        outgoing_ended=True,
+                    ),
+                )
+                crossfade_state["pending_timeout_seconds"] = pending_timeout_seconds
+
+            if created_at is not None and (time.monotonic() - created_at) > pending_timeout_seconds:
                 if not self._fallback_pending_crossfade_to_regular_playback():
                     self._cancel_crossfade_transition(
                         stop_incoming=True, stop_outgoing=False, invalidate_requests=False,

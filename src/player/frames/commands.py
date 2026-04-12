@@ -325,10 +325,15 @@ class FrameCommandMixin:
                 selected_path = previous_path if target_entry.is_parent else None
                 self._enter_folder_directory(target_entry.path, selected_path=selected_path, announce=True)
             else:
+                if self._block_sensitive_action_during_youtube_music("track-selection"):
+                    return
                 self._preview_folder_file(target_entry.path, announce=True)
             return
 
         if not 0 <= item_index < len(state.items):
+            return
+
+        if self._block_sensitive_action_during_youtube_music("track-selection"):
             return
 
         state.select_index(item_index)

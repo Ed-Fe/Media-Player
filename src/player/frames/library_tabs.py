@@ -522,6 +522,9 @@ class FrameLibraryTabsMixin:
         self.SetTitle(f"{APP_TITLE} — {state.title} — {media_name}")
 
     def _play_adjacent_item(self, direction):
+        if self._block_sensitive_action_during_youtube_music("track-navigation"):
+            return
+
         state = self._get_playlist_state()
         if not state or not state.items:
             self._announce("Nenhuma playlist carregada.")
@@ -545,6 +548,9 @@ class FrameLibraryTabsMixin:
         self._play_media(index=self._get_active_playlist_index(), allow_crossfade=True)
 
     def _jump_to_playlist_boundary(self, to_last=False):
+        if self._block_sensitive_action_during_youtube_music("track-selection"):
+            return
+
         state = self._get_playlist_state()
         if not state or not state.items:
             self._announce("Nenhuma playlist carregada.")
@@ -560,6 +566,9 @@ class FrameLibraryTabsMixin:
         self._play_media(index=self._get_active_playlist_index())
 
     def _move_current_item(self, direction):
+        if self._block_sensitive_action_during_youtube_music("playback-order"):
+            return
+
         state = self._get_playlist_state()
         if not state or not state.items:
             self._announce("Nenhuma playlist carregada.")
@@ -601,6 +610,9 @@ class FrameLibraryTabsMixin:
         )
 
     def _toggle_shuffle(self):
+        if self._block_sensitive_action_during_youtube_music("playback-order"):
+            return
+
         state = self._get_playlist_state()
         if not state:
             self._announce("Nenhuma playlist ativa.")
@@ -614,6 +626,9 @@ class FrameLibraryTabsMixin:
         self._refresh_playlist_browser()
 
     def _cycle_repeat_mode(self):
+        if self._block_sensitive_action_during_youtube_music("playback-order"):
+            return
+
         state = self._get_playlist_state()
         if not state:
             self._announce("Nenhuma playlist ativa.")
@@ -625,6 +640,9 @@ class FrameLibraryTabsMixin:
         self._refresh_playlist_browser()
 
     def _remove_item_from_current_playlist(self, item_index, announce_prefix="Item removido"):
+        if self._block_sensitive_action_during_youtube_music("close-media"):
+            return
+
         state = self._get_playlist_state()
         if state and state.is_folder_tab:
             self._announce("Use Ctrl+W para fechar a prévia atual ou Backspace para voltar de pasta.")
@@ -671,6 +689,9 @@ class FrameLibraryTabsMixin:
         self._announce(f"{announce_prefix}: {removed_name}. {state.item_count} itens na playlist.")
 
     def _close_current_media(self):
+        if self._block_sensitive_action_during_youtube_music("close-media"):
+            return
+
         current_tab = self._get_tab_state()
         if isinstance(current_tab, ScreenTabState):
             self._close_current_tab()

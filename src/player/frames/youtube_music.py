@@ -1,4 +1,5 @@
 import os
+import sys
 import threading
 
 import wx
@@ -10,6 +11,53 @@ from ..playlists import PlaylistState
 
 class FrameYouTubeMusicMixin:
     _YOUTUBE_MUSIC_BACKGROUND_TASK_TIMEOUT_MS = 20000
+
+    def _is_youtube_music_operation_in_progress(self):
+        return bool(getattr(self, "_youtube_music_operation_in_progress", False))
+
+    def _is_track_navigation_blocked_by_youtube_music(self):
+        return self._is_youtube_music_operation_in_progress()
+
+    def _announce_track_navigation_blocked_by_youtube_music(self):
+        self._announce(
+            "Aguarde o término da operação do YouTube Music antes de ir para a faixa anterior ou próxima."
+        )
+
+    def _play_windows_youtube_music_blocked_sound(self):
+        if not sys.platform.startswith("win"):
+            return
+
+        try:
+            import winsound
+
+            winsound.MessageBeep(winsound.MB_ICONEXCLAMATION)
+        except Exception:
+            pass
+
+    def _block_sensitive_action_during_youtube_music(self, action_kind):
+        if not self._is_youtube_music_operation_in_progress():
+            return False
+
+        messages = {
+            "track-navigation": (
+                "Aguarde o término da operação do YouTube Music antes de ir para a faixa anterior ou próxima."
+            ),
+            "track-selection": (
+                "Aguarde o término da operação do YouTube Music antes de trocar a faixa atual."
+            ),
+            "playback-order": (
+                "Aguarde o término da operação do YouTube Music antes de alterar repetição, embaralhamento ou a ordem da playlist."
+            ),
+            "close-media": (
+                "Aguarde o término da operação do YouTube Music antes de fechar ou remover a mídia atual."
+            ),
+        }
+
+        if action_kind == "track-navigation":
+            self._play_windows_youtube_music_blocked_sound()
+
+        self._announce(messages.get(action_kind, "Aguarde o término da operação do YouTube Music."))
+        return True
 
     def _get_youtube_music_service(self):
         service = getattr(self, "_youtube_music_service", None)
@@ -24,11 +72,13 @@ class FrameYouTubeMusicMixin:
 
         service = self._get_youtube_music_service()
         has_saved_auth = service.has_saved_browser_auth()
-        operation_in_progress = bool(getattr(self, "_youtube_music_operation_in_progress", False))
+        operation_in_progress = self._is_youtube_music_operation_in_progress()
 
         login_item = self.youtube_music_menu.FindItemById(self.menu_youtube_music_login_id)
         disconnect_item = self.youtube_music_menu.FindItemById(self.menu_youtube_music_disconnect_id)
         open_playlist_item = self.youtube_music_menu.FindItemById(self.menu_youtube_music_open_playlist_id)
+        playback_menu = getattr(self, "playback_menu", None)
+        file_menu = getattr(self, "file_menu", None)
 
         if login_item is not None:
             login_item.SetItemLabel("Atualizar autenticação..." if has_saved_auth else "Conectar &conta...")
@@ -39,6 +89,24 @@ class FrameYouTubeMusicMixin:
 
         if open_playlist_item is not None:
             open_playlist_item.Enable(has_saved_auth and not operation_in_progress)
+
+        if playback_menu is not None:
+            for item_id in (
+                getattr(self, "menu_previous_track_id", None),
+                getattr(self, "menu_next_track_id", None),
+                getattr(self, "menu_toggle_shuffle_id", None),
+                getattr(self, "menu_cycle_repeat_id", None),
+            ):
+                if item_id is None:
+                    continue
+                menu_item = playback_menu.FindItemById(item_id)
+                if menu_item is not None:
+                    menu_item.Enable(not operation_in_progress)
+
+        if file_menu is not None:
+            close_media_item = file_menu.FindItemById(getattr(self, "menu_close_media_id", None))
+            if close_media_item is not None:
+                close_media_item.Enable(not operation_in_progress)
 
     def _set_youtube_music_operation_state(self, in_progress):
         self._youtube_music_operation_in_progress = bool(in_progress)

@@ -17,18 +17,21 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ### Changed
 - O menu **Arquivo** passou a concentrar a abertura geral em uma única ação, mantendo atalhos específicos para abrir arquivos locais e pastas no navegador.
+- A barra de menu foi reorganizada para separar melhor ações de arquivo, reprodução, abas, exibição e ajuda, deixando atalhos e comandos relacionados mais fáceis de localizar.
 - O atalho `Ctrl+O` agora aceita tanto arquivos de mídia quanto uma playlist local `.m3u/.m3u8`, usando o mesmo conjunto de tipos do seletor **Arquivo...** do diálogo unificado.
 - Pastas locais agora podem ser abertas tanto no navegador quanto como playlists estáticas carregadas de forma assíncrona.
 - A reprodução passou a usar players VLC dedicados por faixa no crossfade, com tratamento específico para o backend de áudio do Windows e melhor folga de inicialização entre músicas.
 - O submenu **YouTube Music** passou a atualizar o estado da conexão, permitir desconectar a conta salva e carregar playlists/mixes sem bloquear a interface.
+- Durante operações em segundo plano do **YouTube Music**, comandos sensíveis de troca de faixa, seleção direta, repetição, embaralhamento e fechamento da mídia atual ficam temporariamente bloqueados para evitar corridas de estado.
 - O código do player foi reorganizado por responsabilidades em pacotes como `frames/`, `library/`, `playlists/`, `preferences/`, `equalizer/`, `update/` e `youtube_music/`, com divisão adicional dos fluxos de biblioteca em mixins menores.
 - A área do player agora mostra uma mensagem clara quando a saída de vídeo está desativada e a mídia está tocando em modo áudio apenas.
 - Abas restauradas do YouTube Music agora tentam recuperar novamente os rótulos corretos das faixas após reconectar a conta.
 
 ### Fixed
 - Transições de áudio com menos cortes e sem retorno repentino de volume no fim do crossfade ao avançar entre faixas compatíveis.
-- Próxima/anterior e crossfade do YouTube Music ficaram mais estáveis com cache/prefetch de streams e fallback automático para reprodução normal quando a próxima faixa demora a resolver.
+- Próxima/anterior e crossfade do YouTube Music ficaram mais estáveis com cache/prefetch de streams, espera maior pela próxima faixa quando o stream ainda está aquecendo e fallback automático para reprodução normal só depois desse tempo extra.
 - Operações em segundo plano do YouTube Music agora têm timeout defensivo para evitar deixar o app preso em estado ocupado.
+- Tentativas de usar próxima/anterior durante uma operação do YouTube Music agora também disparam o aviso sonoro característico do Windows como alerta extra.
 
 ### Notes
 - Esta versão inclui uma refatoração estrutural grande. Apesar da validação rápida e das verificações feitas durante o desenvolvimento, ainda podem aparecer problemas ou regressões em fluxos menos exercitados.
