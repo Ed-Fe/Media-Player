@@ -1,7 +1,7 @@
 import os
 from dataclasses import dataclass
 
-from .constants import SUPPORTED_MEDIA_EXTENSIONS
+from .constants import AUDIO_ONLY_EXTENSIONS, SUPPORTED_MEDIA_EXTENSIONS
 
 
 FOLDER_ENTRY_PARENT = "parent"
@@ -30,6 +30,10 @@ class FolderBrowserEntry:
 
 def is_supported_media(filename):
     return os.path.splitext(filename)[1].lower() in SUPPORTED_MEDIA_EXTENSIONS
+
+
+def is_audio_only_media(filename):
+    return os.path.splitext(str(filename or ""))[1].lower() in AUDIO_ONLY_EXTENSIONS
 
 
 def folder_display_name(folder_path):

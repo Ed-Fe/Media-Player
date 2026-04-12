@@ -270,7 +270,8 @@ class FrameCommandMixin:
 
     def on_stop(self, _event):
         state = self._get_playlist_state()
-        self.player.stop()
+        self._cancel_crossfade_transition(stop_incoming=True, stop_outgoing=True, invalidate_requests=True)
+        self._stop_all_players(unload=False)
         if state:
             state.was_playing = False
             state.last_position_ms = 0
@@ -328,7 +329,7 @@ class FrameCommandMixin:
             return
 
         state.select_index(item_index)
-        self._play_media(index=self._get_active_playlist_index())
+        self._play_media(index=self._get_active_playlist_index(), allow_crossfade=False)
 
     def on_playlist_browser_remove_item(self, item_index):
         self._remove_item_from_current_playlist(item_index)
@@ -376,7 +377,7 @@ class FrameCommandMixin:
 
         if self.current_volume == previous_settings.default_volume:
             self.current_volume = self.settings.default_volume
-            self.player.audio_set_volume(self.current_volume)
+            self._apply_current_volume()
 
         self._announce("Preferências salvas.")
 
@@ -403,6 +404,9 @@ class FrameCommandMixin:
 
     def on_progress_timer(self, _event):
         self._update_time_bar()
+
+    def on_crossfade_timer(self, _event):
+        self._handle_playback_timer_tick()
 
     def on_video_panel_resize(self, _event):
         self._bind_player_to_window()
@@ -618,10 +622,11 @@ class FrameCommandMixin:
 
         if hasattr(self, "progress_timer") and self.progress_timer.IsRunning():
             self.progress_timer.Stop()
+        if hasattr(self, "crossfade_timer") and self.crossfade_timer.IsRunning():
+            self.crossfade_timer.Stop()
         self._dispose_equalizer_ui_cache()
         self._save_session()
         self._shutdown_library_loader()
         self._shutdown_player_backend()
-        self.player.stop()
         self.announcer.close()
         self.Destroy()

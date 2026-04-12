@@ -2,7 +2,7 @@ from dataclasses import replace
 
 import wx
 
-from .constants import REPEAT_MODE_LABELS, REPEAT_MODES
+from .constants import MAX_CROSSFADE_SECONDS, REPEAT_MODE_LABELS, REPEAT_MODES
 
 
 class PreferencesDialog(wx.Dialog):
@@ -144,6 +144,16 @@ class PreferencesDialog(wx.Dialog):
             min_value=1,
             max_value=25,
         )
+        crossfade_group, self.crossfade_ctrl = self._build_spin_control_group(
+            page,
+            label_text="Crossfade (segundos, 0 desativa)",
+            help_text=(
+                "Define por quantos segundos duas faixas de áudio se sobrepõem na transição. "
+                "Use 0 para desativar. O crossfade só é aplicado entre arquivos de áudio."
+            ),
+            min_value=0,
+            max_value=MAX_CROSSFADE_SECONDS,
+        )
         seek_step_group, self.seek_step_ctrl = self._build_spin_control_group(
             page,
             label_text="Passo de busca (segundos)",
@@ -158,7 +168,7 @@ class PreferencesDialog(wx.Dialog):
             choices=[REPEAT_MODE_LABELS[mode] for mode in REPEAT_MODES],
         )
 
-        for group in (volume_group, volume_step_group, seek_step_group, repeat_group):
+        for group in (volume_group, volume_step_group, crossfade_group, seek_step_group, repeat_group):
             playback_box.Add(group, 0, wx.LEFT | wx.RIGHT | wx.TOP | wx.EXPAND, 6)
 
         playback_box.Add(self.shuffle_new_playlists_checkbox, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND, 6)
@@ -245,6 +255,7 @@ class PreferencesDialog(wx.Dialog):
         self.confirm_on_exit_checkbox.SetValue(settings.confirm_on_exit)
         self.announcements_enabled_checkbox.SetValue(settings.announcements_enabled)
         self.default_volume_ctrl.SetValue(settings.default_volume)
+        self.crossfade_ctrl.SetValue(settings.crossfade_seconds)
         self.volume_step_ctrl.SetValue(settings.volume_step)
         self.seek_step_ctrl.SetValue(settings.seek_step_seconds)
         self.shuffle_new_playlists_checkbox.SetValue(settings.shuffle_new_playlists)
@@ -260,6 +271,7 @@ class PreferencesDialog(wx.Dialog):
         settings.confirm_on_exit = self.confirm_on_exit_checkbox.GetValue()
         settings.announcements_enabled = self.announcements_enabled_checkbox.GetValue()
         settings.default_volume = int(self.default_volume_ctrl.GetValue())
+        settings.crossfade_seconds = int(self.crossfade_ctrl.GetValue())
         settings.volume_step = int(self.volume_step_ctrl.GetValue())
         settings.seek_step_seconds = int(self.seek_step_ctrl.GetValue())
         settings.shuffle_new_playlists = self.shuffle_new_playlists_checkbox.GetValue()

@@ -1,7 +1,7 @@
 import wx
 
 from .accessibility import attach_named_accessible
-from .constants import PROGRESS_GAUGE_RANGE, PROGRESS_TIMER_INTERVAL_MS
+from .constants import CROSSFADE_TIMER_INTERVAL_MS, PROGRESS_GAUGE_RANGE, PROGRESS_TIMER_INTERVAL_MS
 from .playlist_browser import PlaylistBrowserPanel
 
 
@@ -227,6 +227,7 @@ class FrameUIMixin:
             label=self._primary_shortcuts_hint_text(),
         )
         self.progress_timer = wx.Timer(self)
+        self.crossfade_timer = wx.Timer(self)
 
         progress_sizer = wx.BoxSizer(wx.VERTICAL)
         progress_sizer.Add(self.progress_label, 0, wx.LEFT | wx.RIGHT | wx.TOP | wx.EXPAND, 10)
@@ -275,7 +276,7 @@ class FrameUIMixin:
         panel.SetSizer(root_sizer)
 
         self._create_empty_playlist_tab(select=True)
-        self.player.audio_set_volume(self.current_volume)
+        self._apply_current_volume()
         self._update_time_bar()
         self._refresh_shortcuts_hint_layout()
 
@@ -317,9 +318,11 @@ class FrameUIMixin:
         self.notebook.Bind(wx.EVT_NOTEBOOK_PAGE_CHANGED, self.on_tab_changed)
         self.progress_panel.Bind(wx.EVT_SIZE, self._on_progress_panel_size)
         self.Bind(wx.EVT_TIMER, self.on_progress_timer, self.progress_timer)
+        self.Bind(wx.EVT_TIMER, self.on_crossfade_timer, self.crossfade_timer)
         self.Bind(wx.EVT_CHAR_HOOK, self.on_key_down)
         self.Bind(wx.EVT_CLOSE, self.on_close)
         self.progress_timer.Start(PROGRESS_TIMER_INTERVAL_MS)
+        self.crossfade_timer.Start(CROSSFADE_TIMER_INTERVAL_MS)
 
     def _create_playlist_page(self):
         page = wx.Panel(self.notebook)

@@ -6,11 +6,13 @@ from .equalizer import EqualizerPreset
 from .constants import (
     DEFAULT_ANNOUNCEMENTS_ENABLED,
     DEFAULT_CONFIRM_ON_EXIT,
+    DEFAULT_CROSSFADE_SECONDS,
     DEFAULT_NEW_PLAYLIST_SHUFFLE,
     DEFAULT_REMEMBER_LAST_FOLDER,
     DEFAULT_REMEMBER_WINDOW_SIZE,
     DEFAULT_RESTORE_SESSION_ON_STARTUP,
     DEFAULT_VOLUME,
+    MAX_CROSSFADE_SECONDS,
     REPEAT_MODES,
     REPEAT_OFF,
     SEEK_STEP_MS,
@@ -30,6 +32,7 @@ class AppSettings:
     confirm_on_exit: bool = DEFAULT_CONFIRM_ON_EXIT
     announcements_enabled: bool = DEFAULT_ANNOUNCEMENTS_ENABLED
     default_volume: int = DEFAULT_VOLUME
+    crossfade_seconds: int = DEFAULT_CROSSFADE_SECONDS
     volume_step: int = VOLUME_STEP
     seek_step_seconds: int = SEEK_STEP_MS // 1000
     shuffle_new_playlists: bool = DEFAULT_NEW_PLAYLIST_SHUFFLE
@@ -52,6 +55,7 @@ class AppSettings:
             "confirm_on_exit": self.confirm_on_exit,
             "announcements_enabled": self.announcements_enabled,
             "default_volume": self.default_volume,
+            "crossfade_seconds": self.crossfade_seconds,
             "volume_step": self.volume_step,
             "seek_step_seconds": self.seek_step_seconds,
             "shuffle_new_playlists": self.shuffle_new_playlists,
@@ -72,6 +76,12 @@ class AppSettings:
         settings.confirm_on_exit = bool(data.get("confirm_on_exit", settings.confirm_on_exit))
         settings.announcements_enabled = bool(data.get("announcements_enabled", settings.announcements_enabled))
         settings.default_volume = _clamp_int(data.get("default_volume"), minimum=0, maximum=100, fallback=settings.default_volume)
+        settings.crossfade_seconds = _clamp_int(
+            data.get("crossfade_seconds"),
+            minimum=0,
+            maximum=MAX_CROSSFADE_SECONDS,
+            fallback=settings.crossfade_seconds,
+        )
         settings.volume_step = _clamp_int(data.get("volume_step"), minimum=1, maximum=25, fallback=settings.volume_step)
         settings.seek_step_seconds = _clamp_int(
             data.get("seek_step_seconds"),

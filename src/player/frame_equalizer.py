@@ -70,8 +70,8 @@ class FrameEqualizerMixin:
             return state
         return self._get_playlist_state()
 
-    def _apply_equalizer_state(self, state=None):
-        if not self._equalizer_supported() or not hasattr(self, "player"):
+    def _apply_equalizer_state_to_player(self, player, state=None):
+        if not self._equalizer_supported() or player is None:
             return False
 
         state = state or self._get_equalizer_target_state()
@@ -80,7 +80,7 @@ class FrameEqualizerMixin:
 
         try:
             if not state.equalizer_enabled:
-                return vlc.libvlc_media_player_set_equalizer(self.player, None) == 0
+                return vlc.libvlc_media_player_set_equalizer(player, None) == 0
         except Exception:
             return False
 
@@ -96,7 +96,7 @@ class FrameEqualizerMixin:
             return False
 
         try:
-            return vlc.libvlc_media_player_set_equalizer(self.player, equalizer) == 0
+            return vlc.libvlc_media_player_set_equalizer(player, equalizer) == 0
         except Exception:
             return False
         finally:
@@ -104,6 +104,12 @@ class FrameEqualizerMixin:
                 equalizer.release()
             except Exception:
                 pass
+
+    def _apply_equalizer_state(self, state=None):
+        if not hasattr(self, "player"):
+            return False
+
+        return self._apply_equalizer_state_to_player(self.player, state)
 
     def _set_equalizer_for_target_tab(self, *, enabled=None, preset_id=None, announce=True):
         state = self._get_equalizer_target_state()

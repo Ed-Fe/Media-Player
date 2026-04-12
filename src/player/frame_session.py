@@ -65,7 +65,7 @@ class FrameSessionMixin:
             saved_volume = DEFAULT_VOLUME
 
         self.current_volume = max(0, min(100, saved_volume))
-        self.player.audio_set_volume(self.current_volume)
+        self._apply_current_volume()
 
         if self.settings.remember_window_size:
             saved_window_size = session_payload.get("window_size")

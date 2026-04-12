@@ -736,7 +736,7 @@ class FrameLibraryMixin:
 
         return f"Item atual: {media_name}. Item {state.current_index + 1} de {state.item_count}."
 
-    def _play_media(self, media_path=None, index=None, announce_message=None):
+    def _play_media(self, media_path=None, index=None, announce_message=None, allow_crossfade=False):
         state = self._get_playlist_state(index)
         if not state:
             return
@@ -751,17 +751,84 @@ class FrameLibraryMixin:
         if not state.current_media_path:
             return
 
+        crossfade_state = getattr(self, "_crossfade_state", None)
+        self._cancel_crossfade_transition(
+            stop_incoming=True,
+            stop_outgoing=bool(crossfade_state and crossfade_state.get("phase") == "running"),
+            invalidate_requests=bool(crossfade_state),
+        )
+
         state.was_playing = True
         state.last_position_ms = 0
+        target_index = self._get_active_playlist_index() if index is None else index
+        if allow_crossfade and self._can_crossfade_to_media(state.current_media_path):
+            if self._start_crossfade(
+                state.current_media_path,
+                tab_index=target_index,
+                announce_message=announce_message,
+            ):
+                return
+
         self._update_title()
         self._update_time_bar()
         self._refresh_playlist_browser()
-        target_index = self._get_active_playlist_index() if index is None else index
+
         self._queue_media_start(
             state.current_media_path,
             tab_index=target_index,
             announce_message=announce_message,
         )
+
+    def _maybe_start_automatic_crossfade(self):
+        if getattr(self, "_crossfade_state", None) is not None:
+            return False
+
+        configured_crossfade_ms = self._crossfade_duration_ms()
+        if configured_crossfade_ms <= 0:
+            return False
+
+        state = self._get_playlist_state()
+        if not state or state.is_folder_tab or not state.current_media_path or state.repeat_mode == REPEAT_ONE:
+            return False
+
+        if self.player.get_media() is None or not self.player.is_playing():
+            return False
+
+        current_time = self.player.get_time()
+        total_time = self.player.get_length()
+        if current_time is None or current_time < 0 or total_time is None or total_time <= 0:
+            return False
+
+        startup_headroom_ms = self._crossfade_startup_headroom_ms()
+        crossfade_window_ms = configured_crossfade_ms + startup_headroom_ms
+        remaining_time = total_time - max(0, current_time)
+        if remaining_time > crossfade_window_ms or remaining_time <= 0:
+            return False
+
+        should_wrap = state.repeat_mode == REPEAT_ALL
+        next_media_path = state.peek_in_playback_order(1, wrap=should_wrap)
+        if not next_media_path or not self._can_crossfade_to_media(next_media_path):
+            return False
+
+        wrapped_cycle = False
+        if should_wrap:
+            state.sync_playback_order()
+            if state.shuffle_enabled:
+                wrapped_cycle = state.playback_order_position == len(state.playback_order) - 1
+            else:
+                wrapped_cycle = state.current_index == state.item_count - 1
+
+        target = state.move_in_playback_order(1, wrap=should_wrap)
+        if not target:
+            return False
+
+        loop_prefix = "Nova volta da playlist. " if wrapped_cycle else ""
+        self._play_media(
+            index=self._get_active_playlist_index(),
+            announce_message=f"{loop_prefix}{self._describe_playlist_position(state)}",
+            allow_crossfade=True,
+        )
+        return True
 
     def _update_title(self):
         current_tab = self._get_tab_state()
@@ -814,7 +881,7 @@ class FrameLibraryMixin:
             self._announce(boundary_message)
             return
 
-        self._play_media(index=self._get_active_playlist_index())
+        self._play_media(index=self._get_active_playlist_index(), allow_crossfade=True)
 
     def _jump_to_playlist_boundary(self, to_last=False):
         state = self._get_playlist_state()
@@ -911,7 +978,8 @@ class FrameLibraryMixin:
         removed_current_item = item_index == state.current_index
 
         if removed_current_item:
-            self.player.stop()
+            self._cancel_crossfade_transition(stop_incoming=True, stop_outgoing=True, invalidate_requests=True)
+            self._stop_all_players(unload=False)
 
         state.items.pop(item_index)
         state.refresh_browser_item_labels()

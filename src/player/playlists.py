@@ -273,6 +273,36 @@ class PlaylistState:
     def move_previous(self):
         return self.move_in_playback_order(-1)
 
+    def peek_in_playback_order(self, direction, wrap=False):
+        if not self.items:
+            return None
+
+        self.sync_playback_order()
+
+        if not self.shuffle_enabled:
+            target_index = self.current_index + direction
+            if 0 <= target_index < len(self.items):
+                return self.items[target_index]
+
+            if not wrap:
+                return None
+
+            if direction < 0:
+                return self.items[-1]
+            return self.items[0]
+
+        target_position = self.playback_order_position + direction
+        if 0 <= target_position < len(self.playback_order):
+            return self.items[self.playback_order[target_position]]
+
+        if not wrap or not self.playback_order:
+            return None
+
+        if direction < 0:
+            return self.items[self.playback_order[-1]]
+
+        return None
+
     def reset_playback_order(self, preferred_index=None, anchor_current=True):
         if not self.items:
             self.playback_order = []
