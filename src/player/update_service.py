@@ -66,21 +66,21 @@ def fetch_latest_release() -> UpdateInfo:
 
     tag_name = normalize_version(payload.get("tag_name") or payload.get("name") or "")
     if not tag_name:
-        raise UpdateError("A release mais recente não informou uma versão válida.")
+        raise UpdateError("Não foi possível ler a versão mais recente.")
 
     assets = payload.get("assets")
     if not isinstance(assets, list):
-        raise UpdateError("A release mais recente não trouxe a lista de arquivos para download.")
+        raise UpdateError("Não foi possível ler os arquivos da atualização.")
 
     archive_asset = _select_archive_asset(assets)
     if archive_asset is None:
-        raise UpdateError("A release mais recente não contém um arquivo ZIP compatível para atualização.")
+        raise UpdateError("Não foi encontrado o arquivo da atualização.")
 
     checksum_asset = _select_checksum_asset(assets)
     archive_name = str(archive_asset.get("name") or WINDOWS_RELEASE_ARCHIVE_NAME)
     archive_url = str(archive_asset.get("browser_download_url") or "").strip()
     if not archive_url:
-        raise UpdateError("O arquivo de atualização não contém um link de download válido.")
+        raise UpdateError("Não foi possível abrir o arquivo da atualização.")
 
     return UpdateInfo(
         current_version=normalize_version(APP_VERSION),
@@ -122,7 +122,7 @@ def download_release_archive(
             expected_checksum = _download_expected_checksum(update_info.checksum_url)
             actual_checksum = _calculate_sha256(target_path)
             if actual_checksum.lower() != expected_checksum.lower():
-                raise UpdateError("A verificação de integridade da atualização falhou.")
+                raise UpdateError("O arquivo baixado não pôde ser validado.")
 
         return target_path
     except Exception:
@@ -136,8 +136,7 @@ def can_self_update() -> bool:
 
 def unsupported_install_message() -> str:
     return (
-        "A instalação automática está disponível somente na versão empacotada do Windows, "
-        "com o atualizador incluído na pasta do aplicativo."
+        "A instalação automática só está disponível na versão do Windows empacotada."
     )
 
 
@@ -148,7 +147,7 @@ def launch_external_updater(archive_path: str | os.PathLike[str], *, parent_pid:
 
     archive_file = Path(archive_path).resolve()
     if not archive_file.exists():
-        raise UpdateError("O arquivo baixado da atualização não foi encontrado.")
+        raise UpdateError("Não foi possível encontrar o arquivo baixado.")
 
     app_executable = Path(sys.executable).resolve()
     app_directory = app_executable.parent
@@ -176,7 +175,7 @@ def launch_external_updater(archive_path: str | os.PathLike[str], *, parent_pid:
             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
         )
     except OSError as exc:
-        raise UpdateError(f"Não foi possível iniciar o atualizador externo: {exc}.") from exc
+        raise UpdateError("Não foi possível abrir o atualizador.") from exc
 
 
 def normalize_version(value: str) -> str:
@@ -244,12 +243,12 @@ def _fetch_json(url: str) -> dict:
         response_text = _download_text(url, accept_header="application/vnd.github+json")
         payload = json.loads(response_text)
     except error.URLError as exc:
-        raise UpdateError(f"Não foi possível consultar as releases no GitHub: {exc.reason}.") from exc
+        raise UpdateError("Não foi possível verificar as atualizações.") from exc
     except json.JSONDecodeError as exc:
-        raise UpdateError("A resposta da verificação de atualização veio em um formato inválido.") from exc
+        raise UpdateError("Não foi possível verificar as atualizações.") from exc
 
     if not isinstance(payload, dict):
-        raise UpdateError("A resposta da verificação de atualização não é válida.")
+        raise UpdateError("Não foi possível verificar as atualizações.")
     return payload
 
 
@@ -257,7 +256,7 @@ def _download_expected_checksum(url: str) -> str:
     checksum_text = _download_text(url)
     match = re.search(r"\b[a-fA-F0-9]{64}\b", checksum_text)
     if not match:
-        raise UpdateError("O arquivo de checksum da release não contém um hash SHA-256 válido.")
+        raise UpdateError("Não foi possível validar a integridade do arquivo.")
     return match.group(0)
 
 
@@ -268,9 +267,9 @@ def _download_text(url: str, *, accept_header: str = "text/plain") -> str:
         with request.urlopen(release_request, timeout=UPDATE_HTTP_TIMEOUT_SECONDS) as response:
             return response.read().decode("utf-8")
     except error.HTTPError as exc:
-        raise UpdateError(f"O servidor recusou a verificação de atualização ({exc.code}).") from exc
+        raise UpdateError("Não foi possível acessar as atualizações.") from exc
     except error.URLError as exc:
-        raise UpdateError(f"Não foi possível acessar o servidor de atualização: {exc.reason}.") from exc
+        raise UpdateError("Não foi possível acessar as atualizações.") from exc
 
 
 def _download_file(url: str, target_path: Path, *, expected_size: int, progress_callback=None, cancel_event: Event | None = None):
@@ -301,9 +300,9 @@ def _download_file(url: str, target_path: Path, *, expected_size: int, progress_
                     if progress_callback is not None:
                         progress_callback(downloaded_bytes, total_bytes, "Baixando atualização...")
     except error.HTTPError as exc:
-        raise UpdateError(f"O servidor recusou o download da atualização ({exc.code}).") from exc
+        raise UpdateError("Não foi possível baixar a atualização.") from exc
     except error.URLError as exc:
-        raise UpdateError(f"Não foi possível baixar a atualização: {exc.reason}.") from exc
+        raise UpdateError("Não foi possível baixar a atualização.") from exc
     finally:
         if cancel_event is not None and cancel_event.is_set() and target_path.exists():
             try:
@@ -347,7 +346,7 @@ def _configured_update_repository() -> tuple[str, str]:
     repository_name = str(os.environ.get(UPDATE_REPOSITORY_NAME_ENV) or GITHUB_REPOSITORY_NAME).strip()
 
     if not repository_owner or not repository_name:
-        raise UpdateError("A configuração do repositório de atualização está incompleta.")
+        raise UpdateError("Não foi possível verificar as atualizações.")
 
     return repository_owner, repository_name
 

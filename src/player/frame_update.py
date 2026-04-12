@@ -24,7 +24,7 @@ class FrameUpdateMixin:
         if self._update_check_in_progress:
             if manual:
                 wx.MessageBox(
-                    "A verificação de atualizações já está em andamento.",
+                    "A verificação já está em andamento.",
                     "Atualizações",
                     wx.OK | wx.ICON_INFORMATION,
                     self,
@@ -42,7 +42,7 @@ class FrameUpdateMixin:
             wx.CallAfter(self._finish_update_check, manual, None, str(exc))
             return
         except Exception as exc:
-            wx.CallAfter(self._finish_update_check, manual, None, f"Falha inesperada ao verificar atualizações: {exc}.")
+            wx.CallAfter(self._finish_update_check, manual, None, "Não foi possível verificar as atualizações.")
             return
 
         wx.CallAfter(self._finish_update_check, manual, update_info, "")
@@ -58,7 +58,7 @@ class FrameUpdateMixin:
         if update_info is None:
             if manual:
                 wx.MessageBox(
-                    "Você já está usando a versão mais recente disponível.",
+                    "Você já está na versão mais recente.",
                     "Atualizações",
                     wx.OK | wx.ICON_INFORMATION,
                     self,

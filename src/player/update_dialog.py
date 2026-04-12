@@ -164,7 +164,7 @@ class UpdateDownloadDialog(wx.Dialog):
             wx.CallAfter(self._finish_with_error, str(exc))
             return
         except Exception as exc:
-            wx.CallAfter(self._finish_with_error, f"Falha inesperada ao baixar a atualização: {exc}.")
+            wx.CallAfter(self._finish_with_error, "Não foi possível baixar a atualização.")
             return
 
         wx.CallAfter(self._finish_successfully, str(downloaded_file_path))
@@ -216,8 +216,8 @@ class UpdateDownloadDialog(wx.Dialog):
         self._cancel_requested = True
         self._cancel_event.set()
         self.cancel_button.Disable()
-        self.status_label.SetLabel("Cancelando download...")
-        self.detail_label.SetLabel("Aguarde enquanto o download é interrompido.")
+        self.status_label.SetLabel("Cancelando...")
+        self.detail_label.SetLabel("Aguarde um momento.")
 
     def on_cancel(self, _event):
         self._request_cancel()

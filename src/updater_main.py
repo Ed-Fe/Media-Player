@@ -50,7 +50,7 @@ class UpdateProgressDialog(wx.Dialog):
 
         self.detail_label = wx.StaticText(
             panel,
-            label="Aguarde enquanto o atualizador organiza os arquivos.",
+            label="Aguarde enquanto aplicamos a atualização.",
         )
         self.detail_label.Wrap(460)
         self.detail_label.SetName("Detalhes da atualização")
@@ -103,7 +103,7 @@ class UpdateProgressDialog(wx.Dialog):
         self.progress_gauge.SetValue(self.progress_gauge.GetRange())
         self.update_status(
             "Atualização concluída.",
-            "O aplicativo atualizado será iniciado em instantes.",
+            "O aplicativo será aberto em instantes.",
         )
         self.close_button.Enable()
         wx.CallLater(900, self._close_after_success)
@@ -117,7 +117,7 @@ class UpdateProgressDialog(wx.Dialog):
         self._allow_close = True
         self._pulse_timer.Stop()
         self.update_status(
-            "A atualização não pôde ser concluída.",
+            "Não deu para concluir a atualização.",
             error_message,
         )
         self.close_button.Enable()
@@ -154,8 +154,7 @@ def main() -> int:
     except Exception as exc:
         log_message(f"Falha durante a atualização: {exc}")
         show_error_message(
-            "Não foi possível concluir a atualização automática. "
-            f"Consulte o log em: {LOG_FILE_PATH}"
+            "Não foi possível atualizar agora."
         )
         return 1
 
@@ -217,8 +216,8 @@ def run_update(args, *, status_callback=None):
 
     _report_status(
         status_callback,
-        "Aguardando o encerramento do aplicativo principal.",
-        "Feche o player para continuar.",
+        "Aguardando o fechamento do player.",
+        "",
     )
     wait_for_process_exit(args.parent_pid, timeout_seconds=120)
 
@@ -228,31 +227,31 @@ def run_update(args, *, status_callback=None):
 
     _report_status(
         status_callback,
-        "Extraindo a atualização.",
-        f"Descompactando {package_path.name}.",
+        "Preparando a atualização.",
+        "",
     )
     extract_release_archive(package_path, extract_directory)
     payload_root = locate_payload_root(extract_directory)
 
     _report_status(
         status_callback,
-        "Salvando a instalação atual.",
-        "Movendo a versão anterior para uma pasta de segurança.",
+        "Guardando a versão atual.",
+        "",
     )
     backup_installation(app_dir, backup_directory)
 
     try:
         _report_status(
             status_callback,
-            "Aplicando a nova versão.",
-            f"Movendo {payload_root.name} para a pasta do aplicativo.",
+            "Aplicando a atualização.",
+            "",
         )
         replace_installation(app_dir, payload_root)
     except Exception:
         _report_status(
             status_callback,
-            "Falha ao aplicar a nova versão.",
-            "Restaurando a instalação anterior.",
+            "Não deu para aplicar a atualização.",
+            "",
         )
         restore_installation(app_dir, backup_directory)
         raise
@@ -260,8 +259,8 @@ def run_update(args, *, status_callback=None):
     restart_path = app_dir / restart_executable
     _report_status(
         status_callback,
-        "Finalizando a atualização.",
-        f"Reiniciando por {restart_path.name}.",
+        "Pronto.",
+        "",
     )
     restart_application(restart_path)
 
