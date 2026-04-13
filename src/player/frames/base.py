@@ -26,10 +26,11 @@ class VLCPlayerFrame(
     FrameUIMixin,
     wx.Frame,
 ):
-    def __init__(self):
+    def __init__(self, initial_paths=None):
         super().__init__(None, title=APP_TITLE, size=DEFAULT_WINDOW_SIZE)
 
         self.settings = load_settings()
+        self._initial_paths = initial_paths or []
         self._initialize_equalizer_support()
         self.current_volume = self.settings.default_volume
         self.playlists = []
@@ -53,6 +54,7 @@ class VLCPlayerFrame(
         self.Centre()
         self.Show()
         wx.CallAfter(self._initialize_player_state)
+        wx.CallAfter(self._open_initial_paths)
         wx.CallAfter(self._verify_youtube_music_connection)
         wx.CallAfter(self._prime_equalizer_ui)
         wx.CallAfter(self._schedule_startup_update_check)
@@ -68,3 +70,18 @@ class VLCPlayerFrame(
         except OSError:
             return False
         return True
+
+    def _open_initial_paths(self):
+        if not self._initial_paths:
+            return
+        paths = self._initial_paths
+        self._initial_paths = []
+        self._open_selected_files(paths)
+
+    def receive_external_files(self, paths):
+        """Open files sent by another instance via IPC and bring the window to front."""
+        if paths:
+            self._open_selected_files(paths)
+        self.Iconize(False)
+        self.Raise()
+        self.SetFocus()

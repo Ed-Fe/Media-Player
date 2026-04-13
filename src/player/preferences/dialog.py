@@ -1,4 +1,5 @@
 from dataclasses import replace
+import sys
 
 import wx
 
@@ -107,9 +108,44 @@ class PreferencesDialog(wx.Dialog):
         )
         note_label.Wrap(520)
 
+        if sys.platform == "win32":
+            assoc_box = wx.StaticBoxSizer(wx.StaticBox(page, label="Associação de arquivos"), wx.VERTICAL)
+            assoc_help = wx.StaticText(
+                page,
+                label=(
+                    "Registra o player no menu Abrir Com do Windows para formatos de áudio, "
+                    "vídeo e playlists. Depois, defina o player como padrão nas configurações do Windows."
+                ),
+            )
+            assoc_help.Wrap(500)
+            self._register_assoc_button = wx.Button(page, label="&Registrar como player padrão")
+            self._register_assoc_button.SetName("Registrar como player padrão")
+            self._register_assoc_button.SetHelpText(
+                "Adiciona o player à lista Abrir Com do Windows para formatos de mídia e playlists."
+            )
+            self._unregister_assoc_button = wx.Button(page, label="&Desregistrar associações")
+            self._unregister_assoc_button.SetName("Desregistrar associações")
+            self._unregister_assoc_button.SetHelpText(
+                "Remove o player da lista Abrir Com do Windows."
+            )
+
+            self._register_assoc_button.Bind(wx.EVT_BUTTON, self._on_register_associations)
+            self._unregister_assoc_button.Bind(wx.EVT_BUTTON, self._on_unregister_associations)
+
+            button_row = wx.BoxSizer(wx.HORIZONTAL)
+            button_row.Add(self._register_assoc_button, 0, wx.RIGHT, 6)
+            button_row.Add(self._unregister_assoc_button, 0, 0)
+
+            assoc_box.Add(assoc_help, 0, wx.ALL | wx.EXPAND, 6)
+            assoc_box.Add(button_row, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 6)
+        else:
+            assoc_box = None
+
         page_sizer.Add(info_label, 0, wx.ALL | wx.EXPAND, 10)
         page_sizer.Add(general_box, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND, 10)
         page_sizer.Add(note_label, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND, 10)
+        if assoc_box:
+            page_sizer.Add(assoc_box, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND, 10)
 
         self.notebook.AddPage(page, "Geral", select=True)
 
@@ -303,3 +339,41 @@ class PreferencesDialog(wx.Dialog):
             return
 
         event.Skip()
+
+    def _on_register_associations(self, _event):
+        from ..file_associations import register_file_associations
+
+        if register_file_associations():
+            wx.MessageBox(
+                "Associações registradas com sucesso.\n\n"
+                "Para definir o player como padrão, vá nas configurações do Windows:\n"
+                "Configurações > Aplicativos > Aplicativos padrão.",
+                "Associação de arquivos",
+                wx.OK | wx.ICON_INFORMATION,
+                self,
+            )
+        else:
+            wx.MessageBox(
+                "Não foi possível registrar as associações de arquivo.",
+                "Associação de arquivos",
+                wx.OK | wx.ICON_ERROR,
+                self,
+            )
+
+    def _on_unregister_associations(self, _event):
+        from ..file_associations import unregister_file_associations
+
+        if unregister_file_associations():
+            wx.MessageBox(
+                "Associações removidas.",
+                "Associação de arquivos",
+                wx.OK | wx.ICON_INFORMATION,
+                self,
+            )
+        else:
+            wx.MessageBox(
+                "Não foi possível remover as associações de arquivo.",
+                "Associação de arquivos",
+                wx.OK | wx.ICON_ERROR,
+                self,
+            )
