@@ -79,9 +79,12 @@ class VLCPlayerFrame(
         self._open_selected_files(paths)
 
     def receive_external_files(self, paths):
-        """Open files sent by another instance via IPC and bring the window to front."""
+        """Open files sent by another instance via IPC without forcing focus."""
         if paths:
-            self._open_selected_files(paths)
-        self.Iconize(False)
-        self.Raise()
-        self.SetFocus()
+            self._open_external_files(paths)
+
+        if self.IsIconized():
+            self.Iconize(False)
+
+        if hasattr(self, "RequestUserAttention"):
+            self.RequestUserAttention()

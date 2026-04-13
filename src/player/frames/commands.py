@@ -21,6 +21,24 @@ from ..preferences import PreferencesDialog
 
 
 class FrameCommandMixin:
+    def _split_selected_files(self, paths):
+        media_paths = []
+        playlist_paths = []
+
+        for path in paths:
+            normalized_path = self._normalize_path(path)
+            if not normalized_path or not os.path.isfile(normalized_path):
+                continue
+
+            if is_playlist_source(normalized_path):
+                playlist_paths.append(normalized_path)
+                continue
+
+            if is_supported_media(normalized_path):
+                media_paths.append(normalized_path)
+
+        return media_paths, playlist_paths
+
     def on_open(self, _event):
         with wx.FileDialog(
             self,
@@ -77,20 +95,7 @@ class FrameCommandMixin:
                 return
 
     def _open_selected_files(self, paths, dialog_title="Abrir arquivos"):
-        media_paths = []
-        playlist_paths = []
-
-        for path in paths:
-            normalized_path = self._normalize_path(path)
-            if not normalized_path or not os.path.isfile(normalized_path):
-                continue
-
-            if is_playlist_source(normalized_path):
-                playlist_paths.append(normalized_path)
-                continue
-
-            if is_supported_media(normalized_path):
-                media_paths.append(normalized_path)
+        media_paths, playlist_paths = self._split_selected_files(paths)
 
         if playlist_paths and media_paths:
             wx.MessageBox(
@@ -122,6 +127,26 @@ class FrameCommandMixin:
             wx.OK | wx.ICON_WARNING,
             self,
         )
+        return False
+
+    def _open_external_files(self, paths):
+        media_paths, playlist_paths = self._split_selected_files(paths)
+
+        if playlist_paths and media_paths:
+            self._announce("Arquivos externos mistos não foram abertos. Use apenas mídias ou uma playlist.")
+            return False
+
+        if len(playlist_paths) > 1:
+            self._announce("A abertura externa aceita apenas uma playlist por vez.")
+            return False
+
+        if media_paths:
+            return self._open_external_media_paths(media_paths)
+
+        if playlist_paths:
+            return self._open_playlist_source(playlist_paths[0])
+
+        self._announce("Nenhum arquivo compatível foi recebido do Explorador.")
         return False
 
     def _open_source_from_dialog(self, source_value, open_mode):

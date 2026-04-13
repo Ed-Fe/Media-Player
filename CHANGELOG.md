@@ -7,6 +7,13 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-04-12
+
+### Fixed
+- O empacotamento Windows da release agora inclui os arquivos de localização do `ytmusicapi`, corrigindo a falha do YouTube Music ao listar playlists com a mensagem `No translation file found for domain: 'base'`.
+- Arquivos de mídia enviados pelo Explorador para uma instância já aberta do player agora são adicionados à playlist existente, em vez de abrir automaticamente uma nova playlist.
+- O recebimento de arquivos externos por instância única não força mais o foco da janela; se o app estiver minimizado, ele apenas restaura a janela e pede atenção ao usuário.
+
 ## [0.4.0] - 2026-04-12
 
 ### Added

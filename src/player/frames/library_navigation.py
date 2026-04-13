@@ -1,10 +1,82 @@
 import os
 
+import wx
+
 from ..library import folder_display_name, is_playlist_source, is_remote_media_path, playlist_display_name, scan_folder_contents
 from ..playlists import build_playlist_title
 
 
 class FrameLibraryNavigationMixin:
+    def _playlist_state_for_external_media(self):
+        current_state = self._get_tab_state(self._get_current_tab_index())
+        if getattr(current_state, "is_screen_tab", False):
+            current_state = None
+
+        candidates = [current_state, self._get_active_playlist_state()]
+        for candidate in candidates:
+            if not candidate:
+                continue
+            if candidate.is_folder_tab or candidate.is_loading:
+                continue
+            return candidate
+
+        return None
+
+    def _append_media_paths_to_playlist(self, paths, state):
+        if not state or state.is_folder_tab or state.is_loading:
+            return False
+
+        normalized_paths = []
+        for path in paths:
+            normalized_path = self._normalize_path(path)
+            if normalized_path and os.path.isfile(normalized_path):
+                normalized_paths.append(normalized_path)
+
+        if not normalized_paths:
+            return False
+
+        current_index = state.current_index
+        current_media_path = state.current_media_path
+
+        state.finish_library_load()
+        state.clear_folder_location()
+        state.items.extend(normalized_paths)
+        state.browser_item_labels.extend(os.path.basename(path) or path for path in normalized_paths)
+        state.refresh_browser_item_labels()
+
+        if 0 <= current_index < len(state.items):
+            state.current_index = current_index
+            state.current_media_path = state.items[current_index]
+        elif current_media_path and current_media_path in state.items:
+            restored_index = state.items.index(current_media_path)
+            state.current_index = restored_index
+            state.current_media_path = state.items[restored_index]
+        elif state.items:
+            state.select_index(0)
+
+        if state.current_index >= 0:
+            state.reset_playback_order(preferred_index=state.current_index)
+
+        self._remember_directory(normalized_paths[0])
+        self._refresh_playlist_browser()
+        self._update_title()
+        self._add_recent_media_paths(normalized_paths)
+        count = len(normalized_paths)
+        suffix = "s" if count != 1 else ""
+        self._announce(f"{count} arquivo{suffix} adicionado{suffix} à playlist {state.title}.")
+        return True
+
+    def _open_external_media_paths(self, paths):
+        target_state = self._playlist_state_for_external_media()
+        if target_state and not target_state.is_empty:
+            target_index = self._resolve_playlist_state_index(target_state)
+            appended = self._append_media_paths_to_playlist(paths, target_state)
+            if appended and target_index != wx.NOT_FOUND:
+                self.active_playlist_index = target_index
+            return appended
+
+        return self._open_media_paths(paths)
+
     def _show_loading_library_tab(self, target_index, state, announcement=None):
         self.notebook.SetPageText(target_index, state.title)
         self._select_tab(target_index, announce=False)
