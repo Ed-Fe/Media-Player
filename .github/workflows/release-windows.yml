@@ -41,30 +41,47 @@ jobs:
         run: |
           Copy-Item -Path "dist\MediaPlayerUpdater.exe" -Destination "dist\MediaPlayer\MediaPlayerUpdater.exe" -Force
 
-      - name: Install VLC runtime
+      - name: Download libmpv runtime
         shell: powershell
         run: |
-          choco install vlc --yes --no-progress
+          $ErrorActionPreference = "Stop"
+          $release = Invoke-RestMethod -Headers @{ "User-Agent" = "GitHub-Actions" } -Uri "https://api.github.com/repos/zhongfly/mpv-winbuild/releases/latest"
+          $preferredAssetPattern = '^mpv-dev-x86_64-\d{8}-git-[0-9a-f]+\.7z$'
+          $asset = $release.assets |
+            Where-Object { $_.name -match $preferredAssetPattern } |
+            Sort-Object -Property name -Descending |
+            Select-Object -First 1
 
-      - name: Bundle VLC runtime into dist
-        shell: powershell
-        run: |
-          $vlcSource = "C:\Program Files\VideoLAN\VLC"
-          if (-not (Test-Path $vlcSource)) {
-            throw "Pasta do VLC não encontrada em: $vlcSource"
+          if (-not $asset) {
+            $availableAssets = ($release.assets | Select-Object -ExpandProperty name) -join ', '
+            throw "Não foi possível localizar um asset compatível com o padrão '$preferredAssetPattern' na release mais recente do mpv-winbuild. Assets disponíveis: $availableAssets"
           }
 
-          $targetRoot = "dist\MediaPlayer\vlc"
+          New-Item -Path "build\mpv-runtime" -ItemType Directory -Force | Out-Null
+          Invoke-WebRequest -Uri $asset.browser_download_url -OutFile "build\mpv-runtime\libmpv.7z"
+          & 7z x "build\mpv-runtime\libmpv.7z" "-obuild\mpv-runtime\extracted" -y | Out-Null
+
+      - name: Bundle MPV runtime into dist
+        shell: powershell
+        run: |
+          $mpvDll = Get-ChildItem -Path "build\mpv-runtime\extracted" -Filter "libmpv-2.dll" -Recurse -ErrorAction SilentlyContinue |
+            Select-Object -First 1
+          if (-not $mpvDll) {
+            throw "Runtime libmpv não encontrado nos arquivos baixados do mpv-winbuild"
+          }
+
+          $mpvSource = $mpvDll.Directory.FullName
+          $targetRoot = "dist\MediaPlayer\mpv"
           New-Item -Path $targetRoot -ItemType Directory -Force | Out-Null
-          Copy-Item -Path "$vlcSource\*" -Destination $targetRoot -Recurse -Force
+          Copy-Item -Path "$mpvSource\*" -Destination $targetRoot -Recurse -Force
 
           $licenseDir = "dist\MediaPlayer\THIRD_PARTY_LICENSES"
           New-Item -Path $licenseDir -ItemType Directory -Force | Out-Null
 
           $possibleLicenseFiles = @(
-            "$vlcSource\COPYING.txt",
-            "$vlcSource\COPYING",
-            "$vlcSource\AUTHORS.txt"
+            "$mpvSource\LICENSE.txt",
+            "$mpvSource\COPYING.txt",
+            "$mpvSource\COPYING"
           )
 
           foreach ($file in $possibleLicenseFiles) {
