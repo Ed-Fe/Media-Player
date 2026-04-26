@@ -15,7 +15,7 @@
 	- `frames/youtube_music.py` for YouTube Music auth/menu flows and background-task orchestration
 	- `frames/ui.py` for menus, layout, control setup, and UI bindings
 	- `frames/commands.py` for file dialogs, open/save actions, and command handlers
-	- `frames/playback.py` for VLC backend setup, playback control, and progress updates
+	- `frames/playback.py` for MPV backend setup, playback control, and progress updates
 	- `frames/library.py` for composing library-related mixins and shared library-facing behavior
 	- `frames/library_tabs.py` for playlist tabs, screen tabs, close/select logic, and playlist ordering behavior
 	- `frames/library_loader.py` for background loading of folders and playlists
@@ -27,7 +27,7 @@
 	- `library/open_dialog.py` for the open-source dialog and source-mode helpers
 	- `library/browser.py` for playlist/folder browser UI and keyboard navigation
 	- `equalizer/models.py` for equalizer constants, dataclasses, and normalization helpers
-	- `equalizer/backend.py` for VLC equalizer catalog loading and equalizer instance creation
+	- `equalizer/backend.py` for equalizer preset catalog helpers and MPV filter generation
 	- `equalizer/dialog.py` for the equalizer preset editing dialog
 	- `equalizer/panel.py` for the equalizer tab UI
 	- `playlists/models.py` for playlist/tab state and playback-order behavior
@@ -54,7 +54,7 @@
 - Run the app with `python src/main.py`.
 - Use `python -m compileall src` as the quick validation step after Python changes.
 - There is no automated test suite yet, so for UI changes do a focused manual check of the affected keyboard flows, dialogs, playlist behavior, and announcements.
-- The app depends on VLC being installed on the system.
+- The app depends on an MPV runtime being available on the system or bundled locally.
 - For packaged Windows updater work, use `scripts/build_windows_release.ps1` for a local build and `docs/update-testing.md` for the end-to-end validation checklist.
 
 ## Conventions
@@ -62,7 +62,7 @@
 - This project is keyboard-first and accessibility-first. Preserve existing shortcuts and avoid introducing mouse-only flows.
 - Do not force focus changes in dialogs, tab switches, or auxiliary windows unless explicitly requested.
 - When touching accessibility, prefer the existing helpers in `src/player/accessibility.py` and keep optional `accessible-output2` integration defensive.
-- Preserve behavior that avoids noisy focus on the native VLC output area.
+- Preserve behavior that avoids noisy focus on the native video output area.
 - Before adding a large behavior block to an existing player module, check whether it crosses UI, service, parsing, or playback boundaries; if it does, extract a focused module first.
 - When changing preferences or session behavior, keep storage paths and JSON formats backward-compatible whenever practical.
 - Keep the updater contract aligned across `src/player/constants.py`, `.github/workflows/release-windows.yml`, and release assets: the packaged updater expects `MediaPlayer-windows.zip`, the matching `.sha256`, and `MediaPlayerUpdater.exe`.

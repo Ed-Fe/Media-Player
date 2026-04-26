@@ -8,6 +8,8 @@ __pycache__/
 venv/
 .env
 .vscode/
+mpv/
+MPV/
 build/
 dist/
 *.zip

@@ -5,11 +5,11 @@ import sys
 import threading
 import time
 
-import vlc
 import wx
 
-from ..constants import LOCAL_FILE_CACHING_MS, PROGRESS_GAUGE_RANGE, RESTORE_DELAY_MS, WINDOWS_VLC_VIDEO_OUTPUT
+from ..constants import PROGRESS_GAUGE_RANGE, RESTORE_DELAY_MS
 from ..library import folder_display_name, is_audio_playback_media
+from ..mpv_backend import PlayerEventType, create_player_instance
 from ..playlists import PlaylistState
 from ..youtube_music import is_youtube_music_media
 
@@ -36,7 +36,7 @@ class FramePlaybackMixin:
         self._player_event_managers = {}
         self._player_loaded_media_paths = {}
         for player_key in self._player_keys:
-            instance = self._build_vlc_instance()
+            instance = self._build_player_instance()
             self._player_instances[player_key] = instance
             player, event_manager = self._create_managed_player(player_key, instance)
             self._players[player_key] = player
@@ -49,18 +49,8 @@ class FramePlaybackMixin:
         self._crossfade_state = None
         self._playback_worker.start()
 
-    def _build_vlc_instance(self):
-        args = ["--quiet", "--no-video-title-show", f"--file-caching={LOCAL_FILE_CACHING_MS}"]
-        if not self._video_output_enabled():
-            args.append("--no-video")
-        if sys.platform.startswith("win"):
-            args.append("--aout=directsound")
-            preferred_vout = str(WINDOWS_VLC_VIDEO_OUTPUT or "").strip()
-            if self._video_output_enabled() and preferred_vout:
-                args.append(f"--vout={preferred_vout}")
-        if sys.platform.startswith("linux"):
-            args.append("--no-xlib")
-        return vlc.Instance(*args)
+    def _build_player_instance(self):
+        return create_player_instance(video_output_enabled=self._video_output_enabled())
 
     def _instance_for_player(self, player_key=None):
         if player_key is None:
@@ -77,7 +67,7 @@ class FramePlaybackMixin:
     def _create_managed_player(self, player_key, instance=None):
         target_instance = instance or self._instance_for_player(player_key)
         if target_instance is None:
-            raise RuntimeError("Instância do VLC indisponível para o player.")
+            raise RuntimeError("Instância do backend de reprodução indisponível para o player.")
 
         player = target_instance.media_player_new()
         try:
@@ -89,9 +79,21 @@ class FramePlaybackMixin:
         except Exception:
             pass
         event_manager = player.event_manager()
-        event_manager.event_attach(vlc.EventType.MediaPlayerEndReached, self._on_media_end_reached, player_key)
-        event_manager.event_attach(vlc.EventType.MediaPlayerPlaying, self._on_media_player_playing, player_key)
-        event_manager.event_attach(vlc.EventType.MediaPlayerEncounteredError, self._on_media_player_error, player_key)
+        event_manager.event_attach(
+            PlayerEventType.MEDIA_PLAYER_END_REACHED,
+            self._on_media_end_reached,
+            player_key,
+        )
+        event_manager.event_attach(
+            PlayerEventType.MEDIA_PLAYER_PLAYING,
+            self._on_media_player_playing,
+            player_key,
+        )
+        event_manager.event_attach(
+            PlayerEventType.MEDIA_PLAYER_ERROR,
+            self._on_media_player_error,
+            player_key,
+        )
         return player, event_manager
 
     def _managed_player(self, player_key=None):
@@ -148,7 +150,7 @@ class FramePlaybackMixin:
             except Exception:
                 pass
 
-        instance = self._build_vlc_instance()
+        instance = self._build_player_instance()
         self._player_instances[player_key] = instance
         player, event_manager = self._create_managed_player(player_key, instance)
         self._players[player_key] = player
@@ -596,11 +598,11 @@ class FramePlaybackMixin:
             player_instance = self._instance_for_player(player_key)
             try:
                 if player_instance is None:
-                    raise RuntimeError("Instância do VLC indisponível.")
+                    raise RuntimeError("Instância do backend de reprodução indisponível.")
                 playback_media_path = self._resolve_media_path_for_playback(request["media_path"])
                 media = player_instance.media_new(playback_media_path)
                 if player is None:
-                    raise RuntimeError("Player do VLC indisponível.")
+                    raise RuntimeError("Player de reprodução indisponível.")
                 player.stop()
                 player.set_media(media)
                 video_output_handle = request.get("video_output_handle")
@@ -856,7 +858,7 @@ class FramePlaybackMixin:
     def _load_media(self, media_path):
         player_instance = self._instance_for_player(self._active_player_key)
         if player_instance is None:
-            raise RuntimeError("Instância do VLC indisponível.")
+            raise RuntimeError("Instância do backend de reprodução indisponível.")
 
         media = player_instance.media_new(media_path)
         self.player.set_media(media)
@@ -1054,7 +1056,7 @@ class FramePlaybackMixin:
         self._player_event_managers = {}
         self._player_loaded_media_paths = {}
         for player_key in self._player_keys:
-            instance = self._build_vlc_instance()
+            instance = self._build_player_instance()
             self._player_instances[player_key] = instance
             player, event_manager = self._create_managed_player(player_key, instance)
             self._players[player_key] = player

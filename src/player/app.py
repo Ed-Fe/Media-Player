@@ -1,12 +1,12 @@
 import wx
 
-from .frames import VLCPlayerFrame
+from .frames import MediaPlayerFrame
 from .single_instance import SingleInstanceServer
 
 
 def main(initial_paths=None):
     app = wx.App(False)
-    frame = VLCPlayerFrame(initial_paths=initial_paths or [])
+    frame = MediaPlayerFrame(initial_paths=initial_paths or [])
 
     def _on_external_paths(paths):
         wx.CallAfter(frame.receive_external_files, paths)

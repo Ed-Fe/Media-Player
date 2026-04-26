@@ -15,7 +15,7 @@ PRESET_SOURCE_BUILTIN = "builtin"
 PRESET_SOURCE_CUSTOM = "custom"
 
 
-VLC_PRESET_LABELS = {
+BUILTIN_PRESET_LABELS = {
     "flat": "Padrão",
     "classical": "Clássico",
     "club": "Club",
@@ -36,7 +36,7 @@ VLC_PRESET_LABELS = {
     "techno": "Techno",
 }
 
-VLC_PRESET_DESCRIPTIONS = {
+BUILTIN_PRESET_DESCRIPTIONS = {
     "flat": "Curva neutra, útil para manter o som original da mídia.",
     "classical": "Realça definição e brilho sem exagerar nos graves.",
     "club": "Empurra graves e agudos para uma escuta mais animada.",
@@ -55,6 +55,81 @@ VLC_PRESET_DESCRIPTIONS = {
     "soft": "Escuta suave para reduzir agressividade em faixas brilhantes.",
     "softrock": "Mistura equilíbrio com leve presença de voz e brilho.",
     "techno": "Enfatiza batida, subgrave e brilho eletrônico.",
+}
+
+BUILTIN_PRESET_TABLE = {
+    "flat": {
+        "preamp_db": 12.0,
+        "band_gains_db": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+    },
+    "classical": {
+        "preamp_db": 12.0,
+        "band_gains_db": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, -7.2, -7.2, -7.2, -9.6],
+    },
+    "club": {
+        "preamp_db": 6.0,
+        "band_gains_db": [0.0, 0.0, 8.0, 5.6, 5.6, 5.6, 3.2, 0.0, 0.0, 0.0],
+    },
+    "dance": {
+        "preamp_db": 5.0,
+        "band_gains_db": [9.6, 7.2, 2.4, 0.0, 0.0, -5.6, -7.2, -7.2, 0.0, 0.0],
+    },
+    "fullbass": {
+        "preamp_db": 5.0,
+        "band_gains_db": [-8.0, 9.6, 9.6, 5.6, 1.6, -4.0, -8.0, -10.4, -11.2, -11.2],
+    },
+    "fullbasstreble": {
+        "preamp_db": 4.0,
+        "band_gains_db": [7.2, 5.6, 0.0, -7.2, -4.8, 1.6, 8.0, 11.2, 12.0, 12.0],
+    },
+    "fulltreble": {
+        "preamp_db": 3.0,
+        "band_gains_db": [-9.6, -9.6, -9.6, -4.0, 2.4, 11.2, 16.0, 16.0, 16.0, 16.8],
+    },
+    "headphones": {
+        "preamp_db": 4.0,
+        "band_gains_db": [4.8, 11.2, 5.6, -3.2, -2.4, 1.6, 4.8, 9.6, 12.8, 14.4],
+    },
+    "largehall": {
+        "preamp_db": 5.0,
+        "band_gains_db": [10.4, 10.4, 5.6, 5.6, 0.0, -4.8, -4.8, -4.8, 0.0, 0.0],
+    },
+    "live": {
+        "preamp_db": 7.0,
+        "band_gains_db": [-4.8, 0.0, 4.0, 5.6, 5.6, 5.6, 4.0, 2.4, 2.4, 2.4],
+    },
+    "party": {
+        "preamp_db": 6.0,
+        "band_gains_db": [7.2, 7.2, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 7.2, 7.2],
+    },
+    "pop": {
+        "preamp_db": 6.0,
+        "band_gains_db": [-1.6, 4.8, 7.2, 8.0, 5.6, 0.0, -2.4, -2.4, -1.6, -1.6],
+    },
+    "reggae": {
+        "preamp_db": 8.0,
+        "band_gains_db": [0.0, 0.0, 0.0, -5.6, 0.0, 6.4, 6.4, 0.0, 0.0, 0.0],
+    },
+    "rock": {
+        "preamp_db": 5.0,
+        "band_gains_db": [8.0, 4.8, -5.6, -8.0, -3.2, 4.0, 8.8, 11.2, 11.2, 11.2],
+    },
+    "ska": {
+        "preamp_db": 6.0,
+        "band_gains_db": [-2.4, -4.8, -4.0, 0.0, 4.0, 5.6, 8.8, 9.6, 11.2, 9.6],
+    },
+    "soft": {
+        "preamp_db": 5.0,
+        "band_gains_db": [4.8, 1.6, 0.0, -2.4, 0.0, 4.0, 8.0, 9.6, 11.2, 12.0],
+    },
+    "softrock": {
+        "preamp_db": 7.0,
+        "band_gains_db": [4.0, 4.0, 2.4, 0.0, -4.0, -5.6, -3.2, 0.0, 2.4, 8.8],
+    },
+    "techno": {
+        "preamp_db": 5.0,
+        "band_gains_db": [8.0, 5.6, 0.0, -5.6, -4.8, 0.0, 8.0, 9.6, 9.6, 8.8],
+    },
 }
 
 
@@ -120,7 +195,7 @@ def generate_custom_preset_id():
     return f"{PRESET_SOURCE_CUSTOM}:{uuid.uuid4()}"
 
 
-def normalize_vlc_text(value):
+def normalize_equalizer_text(value):
     if isinstance(value, (bytes, bytearray)):
         return bytes(value).decode("utf-8", errors="replace")
 
@@ -138,7 +213,7 @@ def normalize_vlc_text(value):
 
 
 def normalize_builtin_preset_key(preset_key):
-    normalized_key = normalize_vlc_text(preset_key).strip().lower()
+    normalized_key = normalize_equalizer_text(preset_key).strip().lower()
     return re.sub(r"[^a-z0-9]+", "", normalized_key)
 
 

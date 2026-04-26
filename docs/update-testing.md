@@ -26,7 +26,7 @@ Se essas variáveis não estiverem definidas, o app continua usando `Ed-Fe/Media
 
 ## Preparando uma build local
 
-1. Confirme que o VLC está instalado em `C:\Program Files\VideoLAN\VLC`.
+1. Confirme que o runtime `libmpv` está disponível localmente, apontando `-MpvSource` para uma pasta com `libmpv-2.dll` ou `-MpvRuntimeArchive` para um arquivo `mpv-dev-*.7z`.
 2. Confirme que o ambiente virtual tem `PyInstaller` disponível.
 3. Gere a release local com o script:
 

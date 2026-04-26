@@ -16,7 +16,7 @@ Check for these risks when relevant:
 - Regressions in keyboard-first navigation and existing shortcuts
 - Screen reader announcements that are noisy, missing, or not in Portuguese
 - Behavior that depends unsafely on optional `accessible-output2`
-- Changes that may reintroduce focus on the native VLC output area
+- Changes that may reintroduce focus on the native video output area
 - Preference or session changes that break backward compatibility
 
 Then produce a concise report with:

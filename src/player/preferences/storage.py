@@ -1,7 +1,7 @@
 import json
 import os
 
-from ..session import APP_STORAGE_DIR
+from ..session import get_app_storage_dir
 from .models import AppSettings
 
 
@@ -32,11 +32,4 @@ def save_settings(settings):
 
 
 def _get_storage_dir():
-    if os.name == "nt":
-        base_dir = os.environ.get("APPDATA") or os.path.expanduser("~")
-    else:
-        base_dir = os.environ.get("XDG_CONFIG_HOME") or os.path.join(os.path.expanduser("~"), ".config")
-
-    storage_dir = os.path.join(base_dir, APP_STORAGE_DIR)
-    os.makedirs(storage_dir, exist_ok=True)
-    return storage_dir
+    return get_app_storage_dir()

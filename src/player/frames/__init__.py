@@ -1,4 +1,4 @@
-from .base import VLCPlayerFrame
+from .base import MediaPlayerFrame
 from .commands import FrameCommandMixin
 from .equalizer import FrameEqualizerMixin
 from .library import FrameLibraryMixin
@@ -19,5 +19,5 @@ __all__ = [
     "FrameUIMixin",
     "FrameUpdateMixin",
     "FrameYouTubeMusicMixin",
-    "VLCPlayerFrame",
+    "MediaPlayerFrame",
 ]

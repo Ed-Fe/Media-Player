@@ -1,4 +1,4 @@
-from .backend import build_vlc_equalizer, load_equalizer_catalog
+from .backend import build_mpv_equalizer_filter, load_equalizer_catalog
 from .dialog import EqualizerPresetDialog
 from .models import (
     DEFAULT_EQUALIZER_PREAMP_DB,
@@ -21,7 +21,7 @@ from .models import (
     normalize_builtin_preset_key,
     normalize_custom_presets,
     normalize_equalizer_preset_id,
-    normalize_vlc_text,
+    normalize_equalizer_text,
 )
 from .panel import EqualizerTabPanel
 
@@ -40,7 +40,7 @@ __all__ = [
     "EqualizerPresetDialog",
     "EqualizerTabPanel",
     "build_builtin_preset_id",
-    "build_vlc_equalizer",
+    "build_mpv_equalizer_filter",
     "clamp_gain_db",
     "create_custom_preset",
     "format_frequency_label",
@@ -50,5 +50,5 @@ __all__ = [
     "normalize_builtin_preset_key",
     "normalize_custom_presets",
     "normalize_equalizer_preset_id",
-    "normalize_vlc_text",
+    "normalize_equalizer_text",
 ]

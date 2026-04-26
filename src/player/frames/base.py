@@ -14,7 +14,7 @@ from .update import FrameUpdateMixin
 from .youtube_music import FrameYouTubeMusicMixin
 
 
-class VLCPlayerFrame(
+class MediaPlayerFrame(
     FrameYouTubeMusicMixin,
     FrameCommandMixin,
     FrameSessionMixin,

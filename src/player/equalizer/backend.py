@@ -1,102 +1,78 @@
-import vlc
+import math
 
 from .models import (
+    BUILTIN_PRESET_DESCRIPTIONS,
+    BUILTIN_PRESET_LABELS,
+    BUILTIN_PRESET_TABLE,
     FALLBACK_EQUALIZER_FREQUENCIES_HZ,
-    VLC_PRESET_DESCRIPTIONS,
-    VLC_PRESET_LABELS,
     EqualizerCatalog,
     EqualizerPreset,
+    PRESET_SOURCE_BUILTIN,
     build_builtin_preset_id,
     clamp_gain_db,
     normalize_band_gains,
     normalize_builtin_preset_key,
-    normalize_vlc_text,
 )
 
 
 def load_equalizer_catalog():
-    try:
-        band_count = int(vlc.libvlc_audio_equalizer_get_band_count())
-    except Exception:
-        return EqualizerCatalog()
-
-    if band_count <= 0:
-        return EqualizerCatalog()
-
-    frequencies = []
-    for index in range(band_count):
-        try:
-            frequency = float(vlc.libvlc_audio_equalizer_get_band_frequency(index))
-        except Exception:
-            frequency = -1.0
-
-        if frequency <= 0 and index < len(FALLBACK_EQUALIZER_FREQUENCIES_HZ):
-            frequency = FALLBACK_EQUALIZER_FREQUENCIES_HZ[index]
-
-        frequencies.append(frequency)
-
+    frequencies = list(FALLBACK_EQUALIZER_FREQUENCIES_HZ)
     builtin_presets = []
-    try:
-        preset_count = int(vlc.libvlc_audio_equalizer_get_preset_count())
-    except Exception:
-        preset_count = 0
-
-    for preset_index in range(max(0, preset_count)):
-        preset_name = normalize_vlc_text(vlc.libvlc_audio_equalizer_get_preset_name(preset_index)).strip()
-        if not preset_name:
-            continue
-
-        preset_key = normalize_builtin_preset_key(preset_name)
-        equalizer = None
-        try:
-            equalizer = vlc.libvlc_audio_equalizer_new_from_preset(preset_index)
-            if equalizer is None:
-                continue
-
-            preamp_db = clamp_gain_db(vlc.libvlc_audio_equalizer_get_preamp(equalizer))
-            band_gains_db = [
-                clamp_gain_db(vlc.libvlc_audio_equalizer_get_amp_at_index(equalizer, band_index))
-                for band_index in range(band_count)
-            ]
-        except Exception:
-            continue
-        finally:
-            if equalizer is not None:
-                try:
-                    equalizer.release()
-                except Exception:
-                    pass
-
+    for preset_key, preset_data in BUILTIN_PRESET_TABLE.items():
+        normalized_key = normalize_builtin_preset_key(preset_key)
         builtin_presets.append(
             EqualizerPreset(
-                preset_id=build_builtin_preset_id(preset_key),
-                name=VLC_PRESET_LABELS.get(preset_key, preset_name.title()),
-                preamp_db=preamp_db,
-                band_gains_db=band_gains_db,
-                source="builtin",
-                builtin_key=preset_key,
-                description=VLC_PRESET_DESCRIPTIONS.get(preset_key, f"Preset nativo do VLC: {preset_name}."),
+                preset_id=build_builtin_preset_id(normalized_key),
+                name=BUILTIN_PRESET_LABELS.get(normalized_key, str(preset_key).title()),
+                preamp_db=clamp_gain_db(preset_data.get("preamp_db", 0.0)),
+                band_gains_db=normalize_band_gains(
+                    list(preset_data.get("band_gains_db", [])),
+                    expected_count=len(frequencies),
+                ),
+                source=PRESET_SOURCE_BUILTIN,
+                builtin_key=normalized_key,
+                description=BUILTIN_PRESET_DESCRIPTIONS.get(
+                    normalized_key,
+                    f"Preset embutido do equalizador: {preset_key}.",
+                ),
             )
         )
 
     return EqualizerCatalog(band_frequencies_hz=frequencies, builtin_presets=builtin_presets)
 
 
-def build_vlc_equalizer(preset, *, band_count):
+def _band_width_octaves(band_frequencies_hz, index):
+    if not band_frequencies_hz:
+        return 1.0
+
+    current_frequency = float(band_frequencies_hz[index])
+    previous_frequency = float(band_frequencies_hz[index - 1]) if index > 0 else current_frequency / math.sqrt(2.0)
+    next_frequency = (
+        float(band_frequencies_hz[index + 1])
+        if index + 1 < len(band_frequencies_hz)
+        else current_frequency * math.sqrt(2.0)
+    )
+
+    previous_frequency = max(1.0, previous_frequency)
+    next_frequency = max(current_frequency + 1.0, next_frequency)
+    return max(0.25, round(0.5 * math.log2(next_frequency / previous_frequency), 3))
+
+
+def build_mpv_equalizer_filter(preset, *, band_frequencies_hz):
     if preset is None:
-        return None
+        return ""
 
-    try:
-        equalizer = vlc.AudioEqualizer()
-    except Exception:
-        return None
+    normalized_band_gains = normalize_band_gains(
+        preset.band_gains_db,
+        expected_count=len(band_frequencies_hz),
+    )
+    filter_parts = [f"volume=volume={clamp_gain_db(preset.preamp_db):.1f}dB"]
+    for band_index, frequency_hz in enumerate(band_frequencies_hz):
+        filter_parts.append(
+            "equalizer="
+            f"f={float(frequency_hz):.1f}:"
+            f"t=o:w={_band_width_octaves(band_frequencies_hz, band_index):.3f}:"
+            f"g={clamp_gain_db(normalized_band_gains[band_index]):.1f}"
+        )
 
-    if equalizer is None:
-        return None
-
-    vlc.libvlc_audio_equalizer_set_preamp(equalizer, clamp_gain_db(preset.preamp_db))
-    normalized_band_gains = normalize_band_gains(preset.band_gains_db, expected_count=band_count)
-    for band_index, gain_db in enumerate(normalized_band_gains):
-        vlc.libvlc_audio_equalizer_set_amp_at_index(equalizer, clamp_gain_db(gain_db), band_index)
-
-    return equalizer
+    return f"lavfi=[{','.join(filter_parts)}]"

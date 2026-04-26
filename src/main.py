@@ -1,10 +1,10 @@
 import sys
 
-from player.vlc_runtime import bootstrap_vlc_runtime
+from player.mpv_runtime import bootstrap_mpv_runtime
 
 
 def main():
-    bootstrap_vlc_runtime()
+    bootstrap_mpv_runtime()
 
     initial_paths = sys.argv[1:]
 

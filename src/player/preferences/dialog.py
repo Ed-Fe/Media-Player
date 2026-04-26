@@ -171,7 +171,7 @@ class PreferencesDialog(wx.Dialog):
             "Desativar saída de vídeo",
             (
                 "Mantém a reprodução apenas em áudio, inclusive em arquivos de vídeo. "
-                "Útil para evitar a abertura de janelas externas do VLC no Windows."
+                "Útil para evitar a abertura de janelas externas de vídeo no Windows."
             ),
         )
 

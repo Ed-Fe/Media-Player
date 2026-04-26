@@ -1,5 +1,4 @@
 import wx
-import vlc
 
 from ..equalizer import (
     DEFAULT_EQUALIZER_PRESET_ID,
@@ -9,7 +8,7 @@ from ..equalizer import (
     EqualizerPresetDialog,
     EqualizerTabPanel,
     build_builtin_preset_id,
-    build_vlc_equalizer,
+    build_mpv_equalizer_filter,
     create_custom_preset,
     load_equalizer_catalog,
     normalize_equalizer_preset_id,
@@ -80,7 +79,8 @@ class FrameEqualizerMixin:
 
         try:
             if not state.equalizer_enabled:
-                return vlc.libvlc_media_player_set_equalizer(player, None) == 0
+                player.set_audio_filters("")
+                return True
         except Exception:
             return False
 
@@ -88,22 +88,18 @@ class FrameEqualizerMixin:
         if preset is None:
             return False
 
-        equalizer = build_vlc_equalizer(
+        filter_chain = build_mpv_equalizer_filter(
             preset,
-            band_count=len(self._equalizer_band_frequencies()),
+            band_frequencies_hz=self._equalizer_band_frequencies(),
         )
-        if equalizer is None:
+        if not filter_chain:
             return False
 
         try:
-            return vlc.libvlc_media_player_set_equalizer(player, equalizer) == 0
+            player.set_audio_filters(filter_chain)
+            return True
         except Exception:
             return False
-        finally:
-            try:
-                equalizer.release()
-            except Exception:
-                pass
 
     def _apply_equalizer_state(self, state=None):
         if not hasattr(self, "player"):
@@ -170,7 +166,7 @@ class FrameEqualizerMixin:
             return f"{message} {description}"
 
         if preset.is_builtin:
-            return f"{message} Preset nativo do VLC."
+            return f"{message} Preset embutido do equalizador."
 
         return f"{message} Preset personalizado."
 
@@ -263,7 +259,7 @@ class FrameEqualizerMixin:
         if self._equalizer_supported():
             return True
 
-        self._announce("O equalizador não está disponível nesta instalação do VLC.")
+        self._announce("O equalizador não está disponível nesta instalação.")
         return False
 
     def on_open_equalizer(self, _event):
@@ -476,9 +472,9 @@ class FrameEqualizerMixin:
         if preset.is_builtin:
             self._duplicate_equalizer_preset(
                 preset,
-                title="Salvar cópia do preset do VLC",
+                title="Salvar cópia do preset embutido",
                 intro_text=(
-                    "Presets nativos do VLC são somente leitura. Ajuste os valores abaixo e salve uma cópia personalizada."
+                    "Presets embutidos são somente leitura. Ajuste os valores abaixo e salve uma cópia personalizada."
                 ),
             )
             return
@@ -555,7 +551,7 @@ class FrameEqualizerMixin:
             return
 
         if preset.is_builtin:
-            self._announce("Presets nativos do VLC não podem ser excluídos.")
+            self._announce("Presets embutidos não podem ser excluídos.")
             return
 
         with wx.MessageDialog(

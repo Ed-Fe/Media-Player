@@ -1,5 +1,5 @@
 wxPython>=4.2.1
-python-vlc>=3.0.21203
+python-mpv>=1.0.8
 accessible-output2>=0.17
 ytmusicapi>=1.11.5
 yt-dlp>=2026.1.31
