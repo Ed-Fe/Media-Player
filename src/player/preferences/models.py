@@ -27,6 +27,7 @@ class AppSettings:
     confirm_on_exit: bool = DEFAULT_CONFIRM_ON_EXIT
     announcements_enabled: bool = DEFAULT_ANNOUNCEMENTS_ENABLED
     disable_video_output: bool = DEFAULT_DISABLE_VIDEO_OUTPUT
+    audio_output_device_id: str = ""
     default_volume: int = DEFAULT_VOLUME
     crossfade_seconds: int = DEFAULT_CROSSFADE_SECONDS
     volume_step: int = VOLUME_STEP
@@ -51,6 +52,7 @@ class AppSettings:
             "confirm_on_exit": self.confirm_on_exit,
             "announcements_enabled": self.announcements_enabled,
             "disable_video_output": self.disable_video_output,
+            "audio_output_device_id": self.audio_output_device_id,
             "default_volume": self.default_volume,
             "crossfade_seconds": self.crossfade_seconds,
             "volume_step": self.volume_step,
@@ -73,6 +75,7 @@ class AppSettings:
         settings.confirm_on_exit = bool(data.get("confirm_on_exit", settings.confirm_on_exit))
         settings.announcements_enabled = bool(data.get("announcements_enabled", settings.announcements_enabled))
         settings.disable_video_output = bool(data.get("disable_video_output", settings.disable_video_output))
+        settings.audio_output_device_id = str(data.get("audio_output_device_id") or "").strip()
         settings.default_volume = _clamp_int(data.get("default_volume"), minimum=0, maximum=100, fallback=settings.default_volume)
         settings.crossfade_seconds = _clamp_int(
             data.get("crossfade_seconds"),

@@ -19,12 +19,18 @@ class _FakePlayerCore:
         self.volume = 100
         self.time_pos = 0
         self.duration = 180
+        self.audio_device = "auto"
+        self.audio_device_list = [
+            {"name": "auto", "description": "Padrão do sistema"},
+            {"name": "wasapi/{device-1}", "description": "Alto-falantes USB"},
+        ]
         self.wid = None
         self.core_idle = True
         self.loaded = []
         self.stopped = 0
         self.terminated = 0
         self.callbacks = {}
+        self.option_sets = []
 
     def event_callback(self, *event_names):
         def decorator(callback):
@@ -46,7 +52,11 @@ class _FakePlayerCore:
         self.terminated += 1
 
     def __setitem__(self, key, value):
-        setattr(self, key, value)
+        self.option_sets.append((key, value))
+        setattr(self, key.replace("-", "_"), value)
+
+    def __getitem__(self, key):
+        return getattr(self, key.replace("-", "_"))
 
 
 class _FakeMPVModule:
@@ -57,8 +67,9 @@ class _FakeMPVModule:
     def __init__(self):
         self.created_players = []
 
-    def MPV(self, **_kwargs):
+    def MPV(self, **kwargs):
         player = _FakePlayerCore()
+        player.created_with_kwargs = dict(kwargs)
         self.created_players.append(player)
         return player
 
@@ -101,6 +112,43 @@ class MPVPlayerTests(unittest.TestCase):
         player.play()
 
         self.assertEqual(core.loaded, [("song.mp3", "replace"), ("song.mp3", "replace")])
+
+    def test_lists_available_audio_output_devices(self):
+        player = mpv_backend.MPVPlayer(video_output_enabled=False)
+
+        devices = player.list_audio_output_devices()
+
+        self.assertEqual([device.device_id for device in devices], ["wasapi/{device-1}"])
+        self.assertEqual(devices[0].menu_label, "Alto-falantes USB")
+
+    def test_sets_specific_audio_output_device(self):
+        player = mpv_backend.MPVPlayer(video_output_enabled=False)
+        core = self.fake_module.created_players[0]
+
+        player.set_audio_output_device("wasapi/{device-1}")
+
+        self.assertEqual(core.audio_device, "wasapi/{device-1}")
+        self.assertEqual(player.get_audio_output_device(), "wasapi/{device-1}")
+
+    def test_applies_audio_output_device_after_player_creation(self):
+        mpv_backend.MPVPlayer(
+            video_output_enabled=False,
+            audio_output_device_id="wasapi/{device-1}",
+        )
+
+        core = self.fake_module.created_players[0]
+
+        self.assertNotIn("audio_device", core.created_with_kwargs)
+        self.assertIn(("audio-device", "wasapi/{device-1}"), core.option_sets)
+
+    def test_normalizes_default_audio_output_device(self):
+        player = mpv_backend.MPVPlayer(video_output_enabled=False)
+        core = self.fake_module.created_players[0]
+
+        player.set_audio_output_device("")
+
+        self.assertEqual(core.audio_device, "auto")
+        self.assertEqual(player.get_audio_output_device(), "")
 
 
 if __name__ == "__main__":

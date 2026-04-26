@@ -5,6 +5,8 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Callable
 
+from .audio_output import AudioOutputDevice, audio_output_device_from_mpv_entry, normalize_audio_output_device_id
+
 
 _mpv_module = None
 
@@ -47,7 +49,7 @@ class MPVEventManager:
 
 
 class MPVPlayer:
-    def __init__(self, *, video_output_enabled: bool = True):
+    def __init__(self, *, video_output_enabled: bool = True, audio_output_device_id: str = ""):
         self._mpv = _load_mpv_module()
         self._event_manager = MPVEventManager()
         self._media: MPVMedia | None = None
@@ -68,10 +70,41 @@ class MPVPlayer:
             self._player = self._mpv.MPV(**player_kwargs)
         except Exception as exc:
             raise RuntimeError(
-                "Não foi possível carregar o runtime do MPV. "
-                "Verifique se a pasta mpv/ está disponível ao lado do app ou se o runtime do MPV foi instalado no sistema."
+                "Não foi possível iniciar uma instância do MPV. "
+                f"Detalhes: {exc}"
             ) from exc
+        initial_audio_output_device_id = normalize_audio_output_device_id(audio_output_device_id)
+        if initial_audio_output_device_id:
+            try:
+                self.set_audio_output_device(initial_audio_output_device_id)
+            except Exception:
+                pass
         self._register_callbacks()
+
+    def _get_option(self, option_name: str, default=None):
+        try:
+            return self._player[option_name]
+        except Exception:
+            python_option_name = option_name.replace("-", "_")
+            try:
+                return getattr(self._player, python_option_name)
+            except Exception:
+                return default
+
+    def _set_option(self, option_name: str, value):
+        python_option_name = option_name.replace("-", "_")
+        try:
+            self._player[option_name] = value
+            return
+        except Exception:
+            setattr(self._player, python_option_name, value)
+
+    def _get_runtime_property(self, property_name: str, default=None):
+        python_property_name = property_name.replace("-", "_")
+        try:
+            return getattr(self._player, python_property_name)
+        except Exception:
+            return default
 
     def _core_is_idle(self):
         try:
@@ -184,6 +217,27 @@ class MPVPlayer:
     def audio_set_volume(self, volume):
         self._player.volume = max(0, min(100, int(volume)))
 
+    def list_audio_output_devices(self) -> list[AudioOutputDevice]:
+        devices = []
+        raw_devices = self._get_runtime_property("audio-device-list", default=[])
+        if not isinstance(raw_devices, list):
+            return devices
+
+        for raw_device in raw_devices:
+            device = audio_output_device_from_mpv_entry(raw_device)
+            if device is not None and device.device_id:
+                devices.append(device)
+
+        return devices
+
+    def get_audio_output_device(self) -> str:
+        current_device = self._get_option("audio-device", default="")
+        return normalize_audio_output_device_id(current_device)
+
+    def set_audio_output_device(self, device_id: str):
+        normalized_device_id = normalize_audio_output_device_id(device_id)
+        self._set_option("audio-device", normalized_device_id or "auto")
+
     def get_time(self):
         time_pos = self._player.time_pos
         if time_pos is None:
@@ -208,11 +262,15 @@ class MPVPlayer:
 
 
 class MPVInstance:
-    def __init__(self, *, video_output_enabled: bool = True):
+    def __init__(self, *, video_output_enabled: bool = True, audio_output_device_id: str = ""):
         self._video_output_enabled = video_output_enabled
+        self._audio_output_device_id = normalize_audio_output_device_id(audio_output_device_id)
 
     def media_player_new(self):
-        return MPVPlayer(video_output_enabled=self._video_output_enabled)
+        return MPVPlayer(
+            video_output_enabled=self._video_output_enabled,
+            audio_output_device_id=self._audio_output_device_id,
+        )
 
     def media_new(self, media_path):
         return MPVMedia(path=str(media_path or "").strip())
@@ -221,5 +279,8 @@ class MPVInstance:
         return None
 
 
-def create_player_instance(*, video_output_enabled: bool = True):
-    return MPVInstance(video_output_enabled=video_output_enabled)
+def create_player_instance(*, video_output_enabled: bool = True, audio_output_device_id: str = ""):
+    return MPVInstance(
+        video_output_enabled=video_output_enabled,
+        audio_output_device_id=audio_output_device_id,
+    )

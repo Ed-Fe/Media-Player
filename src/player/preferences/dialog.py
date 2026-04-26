@@ -3,11 +3,12 @@ import sys
 
 import wx
 
+from ..audio_output import normalize_audio_output_device_id
 from ..constants import MAX_CROSSFADE_SECONDS, REPEAT_MODE_LABELS, REPEAT_MODES
 
 
 class PreferencesDialog(wx.Dialog):
-    def __init__(self, parent, settings):
+    def __init__(self, parent, settings, *, audio_output_devices=None):
         super().__init__(
             parent,
             title="Preferências",
@@ -15,6 +16,8 @@ class PreferencesDialog(wx.Dialog):
         )
 
         self._settings = settings
+        self._audio_output_devices = list(audio_output_devices or [])
+        self._audio_output_choice_ids = []
 
         panel = wx.Panel(self)
         root_sizer = wx.BoxSizer(wx.VERTICAL)
@@ -212,8 +215,24 @@ class PreferencesDialog(wx.Dialog):
             help_text="Modo de repetição aplicado automaticamente às playlists novas.",
             choices=[REPEAT_MODE_LABELS[mode] for mode in REPEAT_MODES],
         )
+        audio_output_group, self.audio_output_choice = self._build_choice_control_group(
+            page,
+            label_text="Dispositivo de áudio",
+            help_text=(
+                "Escolhe a saída de áudio usada na reprodução. "
+                "Use Padrão do sistema para seguir o dispositivo principal do Windows."
+            ),
+            choices=self._audio_output_choice_labels(),
+        )
 
-        for group in (volume_group, volume_step_group, crossfade_group, seek_step_group, repeat_group):
+        for group in (
+            volume_group,
+            volume_step_group,
+            crossfade_group,
+            seek_step_group,
+            repeat_group,
+            audio_output_group,
+        ):
             playback_box.Add(group, 0, wx.LEFT | wx.RIGHT | wx.TOP | wx.EXPAND, 6)
 
         playback_box.Add(self.shuffle_new_playlists_checkbox, 0, wx.LEFT | wx.RIGHT | wx.TOP | wx.EXPAND, 6)
@@ -294,6 +313,27 @@ class PreferencesDialog(wx.Dialog):
         box_sizer.Add(help_label, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM | wx.EXPAND, 6)
         return box_sizer
 
+    def _audio_output_choice_labels(self):
+        self._audio_output_choice_ids = [""]
+        labels = ["Padrão do sistema"]
+
+        selected_device_id = normalize_audio_output_device_id(getattr(self._settings, "audio_output_device_id", ""))
+        seen_ids = {""}
+
+        for device in self._audio_output_devices:
+            device_id = normalize_audio_output_device_id(getattr(device, "device_id", ""))
+            if not device_id or device_id in seen_ids:
+                continue
+            labels.append(getattr(device, "menu_label", device_id))
+            self._audio_output_choice_ids.append(device_id)
+            seen_ids.add(device_id)
+
+        if selected_device_id and selected_device_id not in seen_ids:
+            labels.append(f"Dispositivo salvo indisponível — {selected_device_id}")
+            self._audio_output_choice_ids.append(selected_device_id)
+
+        return labels
+
     def _populate_controls(self, settings):
         self.restore_session_checkbox.SetValue(settings.restore_session_on_startup)
         self.remember_window_size_checkbox.SetValue(settings.remember_window_size)
@@ -310,6 +350,13 @@ class PreferencesDialog(wx.Dialog):
         repeat_mode_index = REPEAT_MODES.index(settings.repeat_mode_new_playlists)
         self.repeat_mode_choice.SetSelection(repeat_mode_index)
 
+        selected_audio_output_device_id = normalize_audio_output_device_id(settings.audio_output_device_id)
+        try:
+            audio_output_index = self._audio_output_choice_ids.index(selected_audio_output_device_id)
+        except ValueError:
+            audio_output_index = 0
+        self.audio_output_choice.SetSelection(audio_output_index)
+
     def get_settings(self):
         settings = replace(self._settings)
         settings.restore_session_on_startup = self.restore_session_checkbox.GetValue()
@@ -324,6 +371,11 @@ class PreferencesDialog(wx.Dialog):
         settings.seek_step_seconds = int(self.seek_step_ctrl.GetValue())
         settings.shuffle_new_playlists = self.shuffle_new_playlists_checkbox.GetValue()
         settings.repeat_mode_new_playlists = REPEAT_MODES[self.repeat_mode_choice.GetSelection()]
+        selected_audio_output_index = self.audio_output_choice.GetSelection()
+        if 0 <= selected_audio_output_index < len(self._audio_output_choice_ids):
+            settings.audio_output_device_id = self._audio_output_choice_ids[selected_audio_output_index]
+        else:
+            settings.audio_output_device_id = ""
 
         if not settings.remember_last_folder:
             settings.last_open_dir = ""

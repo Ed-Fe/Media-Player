@@ -59,6 +59,7 @@ class FrameUIMixin:
             "Seta esquerda / direita — Voltar ou avançar no arquivo\n"
             "Home / End — Ir para o início ou para o fim\n"
             "Seta cima / baixo — Aumentar ou diminuir o volume\n"
+            "Menu Reprodução > Dispositivo de áudio — Trocar a saída de som\n"
             "Ctrl+PageUp / Ctrl+PageDown — Faixa anterior ou próxima\n"
             "Ctrl+L — Curtir mídia atual no YouTube Music\n"
             "Ctrl+Shift+L — Marcar mídia atual como não gostei no YouTube Music\n"
@@ -229,6 +230,10 @@ class FrameUIMixin:
         self.menu_announce_time_id = wx.NewIdRef()
         self.menu_announce_volume_id = wx.NewIdRef()
         self.menu_announce_status_id = wx.NewIdRef()
+        self.menu_refresh_audio_output_devices_id = wx.NewIdRef()
+        self.audio_output_menu = wx.Menu()
+        self._audio_output_menu_actions = {}
+        self._audio_output_menu_ids = []
         announce_menu = wx.Menu()
         playback_menu.Append(self.menu_previous_track_id, "Faixa &Anterior\tCtrl+PageUp")
         playback_menu.Append(self.menu_play_pause_id, "Reproduzir / Pa&usar\tEspaço")
@@ -237,6 +242,7 @@ class FrameUIMixin:
         playback_menu.AppendSeparator()
         playback_menu.Append(self.menu_toggle_shuffle_id, "Em&baralhar (E)")
         playback_menu.Append(self.menu_cycle_repeat_id, "Modo de &Repetição (R)")
+        playback_menu.AppendSubMenu(self.audio_output_menu, "Dispositivo de áu&dio")
         announce_menu.Append(self.menu_announce_time_id, "Anunciar &Tempo (T)")
         announce_menu.Append(self.menu_announce_volume_id, "Anunciar &Volume (V)")
         announce_menu.Append(self.menu_announce_status_id, "Anunciar &Status (S)")
@@ -278,6 +284,52 @@ class FrameUIMixin:
         menu_bar.Append(help_menu, "A&juda")
         self.SetMenuBar(menu_bar)
         self._refresh_recent_menus()
+        self._refresh_audio_output_menu()
+
+    def _refresh_audio_output_menu(self, announce=False):
+        if not hasattr(self, "audio_output_menu"):
+            return
+
+        while self.audio_output_menu.GetMenuItemCount():
+            self.audio_output_menu.Delete(self.audio_output_menu.FindItemByPosition(0))
+
+        self._audio_output_menu_actions = {}
+        self._audio_output_menu_ids = []
+
+        default_item = self.audio_output_menu.AppendRadioItem(wx.NewIdRef(), "&Padrão do sistema")
+        default_item_id = default_item.GetId()
+        self._audio_output_menu_ids.append(default_item_id)
+        self._audio_output_menu_actions[default_item_id] = ""
+        self.Bind(wx.EVT_MENU, self.on_select_audio_output_device, id=default_item_id)
+
+        devices = list(getattr(self, "_audio_output_devices", lambda: [])())
+        current_device_id = getattr(self, "_current_audio_output_device_id", lambda: "")()
+        default_item.Check(not current_device_id)
+
+        if devices:
+            self.audio_output_menu.AppendSeparator()
+            for device in devices:
+                item = self.audio_output_menu.AppendRadioItem(wx.NewIdRef(), device.menu_label)
+                item_id = item.GetId()
+                self._audio_output_menu_ids.append(item_id)
+                self._audio_output_menu_actions[item_id] = device.device_id
+                self.Bind(wx.EVT_MENU, self.on_select_audio_output_device, id=item_id)
+                item.Check(device.device_id == current_device_id)
+        else:
+            unavailable_item = self.audio_output_menu.Append(wx.ID_ANY, "Nenhum dispositivo detectado agora")
+            unavailable_item.Enable(False)
+
+        self.audio_output_menu.AppendSeparator()
+        self.audio_output_menu.Append(
+            self.menu_refresh_audio_output_devices_id,
+            "&Atualizar lista de dispositivos",
+        )
+
+        if announce:
+            if devices:
+                self._announce(f"Lista de dispositivos de áudio atualizada. {len(devices)} dispositivo(s) disponível(is).")
+            else:
+                self._announce("Lista de dispositivos de áudio atualizada, mas nenhum dispositivo foi detectado agora.")
 
     def _build_ui(self):
         panel = wx.Panel(self)
@@ -371,6 +423,7 @@ class FrameUIMixin:
         self.Bind(wx.EVT_MENU, self.on_open_equalizer, id=self.menu_open_equalizer_id)
         self.Bind(wx.EVT_MENU, self.on_toggle_shuffle, id=self.menu_toggle_shuffle_id)
         self.Bind(wx.EVT_MENU, self.on_cycle_repeat_mode, id=self.menu_cycle_repeat_id)
+        self.Bind(wx.EVT_MENU, self.on_refresh_audio_output_devices, id=self.menu_refresh_audio_output_devices_id)
         self.Bind(wx.EVT_MENU, self.on_announce_time, id=self.menu_announce_time_id)
         self.Bind(wx.EVT_MENU, self.on_announce_volume, id=self.menu_announce_volume_id)
         self.Bind(wx.EVT_MENU, self.on_announce_status, id=self.menu_announce_status_id)

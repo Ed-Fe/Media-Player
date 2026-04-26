@@ -7,6 +7,7 @@ import time
 
 import wx
 
+from ..audio_output import normalize_audio_output_device_id
 from ..constants import PROGRESS_GAUGE_RANGE, RESTORE_DELAY_MS
 from ..library import folder_display_name, is_audio_playback_media
 from ..mpv_backend import PlayerEventType, create_player_instance
@@ -21,6 +22,9 @@ class FramePlaybackMixin:
 
     def _video_output_enabled(self):
         return not bool(getattr(self.settings, "disable_video_output", False))
+
+    def _selected_audio_output_device_id(self):
+        return normalize_audio_output_device_id(getattr(self.settings, "audio_output_device_id", ""))
 
     def _initialize_player_state(self):
         self._bind_player_to_window()
@@ -54,7 +58,94 @@ class FramePlaybackMixin:
         self._playback_worker.start()
 
     def _build_player_instance(self):
-        return create_player_instance(video_output_enabled=self._video_output_enabled())
+        return create_player_instance(
+            video_output_enabled=self._video_output_enabled(),
+            audio_output_device_id=self._selected_audio_output_device_id(),
+        )
+
+    def _audio_output_devices(self):
+        inspected_players = []
+        active_player = getattr(self, "player", None)
+        if active_player is not None:
+            inspected_players.append(active_player)
+
+        for player_key in getattr(self, "_player_keys", ()): 
+            player = self._managed_player(player_key)
+            if player is not None and player not in inspected_players:
+                inspected_players.append(player)
+
+        for player in inspected_players:
+            try:
+                devices = player.list_audio_output_devices()
+            except Exception:
+                continue
+            if devices:
+                return devices
+
+        return []
+
+    def _current_audio_output_device_id(self):
+        player = getattr(self, "player", None)
+        if player is None:
+            return ""
+
+        try:
+            return normalize_audio_output_device_id(player.get_audio_output_device())
+        except Exception:
+            return ""
+
+    def _apply_audio_output_device_to_players(self, device_id):
+        normalized_device_id = normalize_audio_output_device_id(device_id)
+        applied_to_any_player = False
+        for player_key in getattr(self, "_player_keys", ()): 
+            player = self._managed_player(player_key)
+            if player is None:
+                continue
+            player.set_audio_output_device(normalized_device_id)
+            applied_to_any_player = True
+
+        return applied_to_any_player
+
+    def _set_audio_output_device(self, device_id, *, announce=True, previous_device_id=None):
+        normalized_device_id = normalize_audio_output_device_id(device_id)
+        previous_normalized_device_id = normalize_audio_output_device_id(
+            previous_device_id if previous_device_id is not None else getattr(self.settings, "audio_output_device_id", "")
+        )
+
+        try:
+            self._apply_audio_output_device_to_players(normalized_device_id)
+        except Exception as exc:
+            self.settings.audio_output_device_id = previous_normalized_device_id
+            try:
+                self._apply_audio_output_device_to_players(previous_normalized_device_id)
+            except Exception:
+                pass
+            refresh_audio_output_menu = getattr(self, "_refresh_audio_output_menu", None)
+            if callable(refresh_audio_output_menu):
+                refresh_audio_output_menu()
+            if announce:
+                self._announce(f"Não foi possível trocar o dispositivo de áudio: {exc}.")
+            return False
+
+        self.settings.audio_output_device_id = normalized_device_id
+        self._save_settings()
+        refresh_audio_output_menu = getattr(self, "_refresh_audio_output_menu", None)
+        if callable(refresh_audio_output_menu):
+            refresh_audio_output_menu()
+
+        if announce:
+            if normalized_device_id:
+                selected_device = None
+                for device in self._audio_output_devices():
+                    if device.device_id == normalized_device_id:
+                        selected_device = device
+                        break
+                device_label = selected_device.menu_label if selected_device else normalized_device_id
+                self._announce(f"Dispositivo de áudio alterado para {device_label}.")
+            else:
+                self._announce("Dispositivo de áudio alterado para o padrão do sistema.")
+
+        return True
 
     def _instance_for_player(self, player_key=None):
         if player_key is None:

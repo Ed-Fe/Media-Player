@@ -397,7 +397,11 @@ class FrameCommandMixin:
 
     def on_open_preferences(self, _event):
         previous_settings = self.settings
-        dialog = PreferencesDialog(self, self.settings)
+        dialog = PreferencesDialog(
+            self,
+            self.settings,
+            audio_output_devices=self._audio_output_devices(),
+        )
         try:
             if dialog.ShowModal() != wx.ID_OK:
                 return
@@ -408,8 +412,6 @@ class FrameCommandMixin:
         if not self.settings.remember_last_folder:
             self.settings.last_open_dir = ""
 
-        self._save_settings()
-
         if self.current_volume == previous_settings.default_volume:
             self.current_volume = self.settings.default_volume
             self._apply_current_volume()
@@ -417,7 +419,33 @@ class FrameCommandMixin:
         if self.settings.disable_video_output != previous_settings.disable_video_output:
             self._refresh_player_backend_for_video_output_setting()
 
-        self._announce("Preferências salvas.")
+        audio_output_updated = True
+        if self.settings.audio_output_device_id != previous_settings.audio_output_device_id:
+            audio_output_updated = self._set_audio_output_device(
+                self.settings.audio_output_device_id,
+                announce=True,
+                previous_device_id=previous_settings.audio_output_device_id,
+            )
+            if not audio_output_updated:
+                self._save_settings()
+        else:
+            self._save_settings()
+
+        if audio_output_updated:
+            self._announce("Preferências salvas.")
+        else:
+            self._announce("Preferências salvas, mas o dispositivo de áudio anterior foi mantido.")
+
+    def on_select_audio_output_device(self, event):
+        selected_device_id = self._audio_output_menu_actions.get(event.GetId())
+        if selected_device_id is None:
+            event.Skip()
+            return
+
+        self._set_audio_output_device(selected_device_id)
+
+    def on_refresh_audio_output_devices(self, _event):
+        self._refresh_audio_output_menu(announce=True)
 
     def on_show_keyboard_help(self, _event):
         self._show_keyboard_help_dialog()
