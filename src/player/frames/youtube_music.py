@@ -9,8 +9,10 @@ from player.youtube_music import (
     YouTubeMusicBrowserAuthDialog,
     YouTubeMusicService,
     YouTubeMusicTabPanel,
+    is_youtube_music_media,
     extract_playlist_id_from_source,
     extract_playlist_id_from_text,
+    get_search_scope_option,
 )
 
 from ..playlists import PlaylistState, ScreenTabState
@@ -82,9 +84,23 @@ class FrameYouTubeMusicMixin:
     def _youtube_music_library_cache(self):
         return list(getattr(self, "_youtube_music_library_playlists", []))
 
+    def _youtube_music_search_results(self):
+        return list(getattr(self, "_youtube_music_search_results_cache", []))
+
+    def _youtube_music_search_summary(self):
+        return str(getattr(self, "_youtube_music_search_summary_message", "") or "").strip()
+
     def _set_youtube_music_library_cache(self, playlists, *, status_message=None):
         self._youtube_music_library_playlists = list(playlists or [])
         self._youtube_music_library_loaded = True
+        if status_message is not None:
+            self._youtube_music_library_status_message = str(status_message or "").strip()
+        self._refresh_youtube_music_screen_later()
+
+    def _set_youtube_music_search_results(self, search_results, *, search_summary=None, status_message=None):
+        self._youtube_music_search_results_cache = list(search_results or [])
+        if search_summary is not None:
+            self._youtube_music_search_summary_message = str(search_summary or "").strip()
         if status_message is not None:
             self._youtube_music_library_status_message = str(status_message or "").strip()
         self._refresh_youtube_music_screen_later()
@@ -110,6 +126,10 @@ class FrameYouTubeMusicMixin:
             on_refresh_library=self._on_youtube_music_refresh_button,
             on_open_selected=self._on_youtube_music_open_selected_button,
             on_open_manual_source=self._on_youtube_music_open_manual_source_button,
+            on_search=self._on_youtube_music_search_button,
+            on_open_search_result=self._on_youtube_music_open_search_result_button,
+            on_save_search_result=self._on_youtube_music_save_search_result_button,
+            on_add_search_result_to_playlist=self._on_youtube_music_add_search_result_to_playlist_button,
         )
 
     def _get_youtube_music_panel(self):
@@ -139,6 +159,8 @@ class FrameYouTubeMusicMixin:
             playlists=self._youtube_music_library_cache(),
             operation_in_progress=self._is_youtube_music_operation_in_progress(),
             status_message=self._youtube_music_status_message(),
+            search_results=self._youtube_music_search_results(),
+            search_summary=self._youtube_music_search_summary(),
         )
 
     def _playlist_summary_by_id(self, playlist_id):
@@ -404,8 +426,8 @@ class FrameYouTubeMusicMixin:
             self._create_youtube_music_page,
             select=True,
             activation_message=(
-                "Aba YouTube Music. Use os controles para conectar a conta, atualizar a biblioteca "
-                "e abrir playlists ou mixes."
+                "Aba YouTube Music. Use os controles para conectar a conta, atualizar a biblioteca, pesquisar "
+                "no catálogo e abrir playlists, mixes, músicas ou vídeos."
             ),
             on_activate=self._refresh_youtube_music_screen_later,
         )
@@ -459,6 +481,199 @@ class FrameYouTubeMusicMixin:
         playlist = self._playlist_summary_by_id(playlist_id)
         fallback_title = playlist.title if playlist is not None else f"Playlist {playlist_id}"
         self._load_youtube_music_playlist_by_id(playlist_id, fallback_title=fallback_title)
+
+    def _on_youtube_music_search_button(self):
+        self.on_search_youtube_music(None)
+
+    def _on_youtube_music_open_search_result_button(self):
+        self._open_youtube_music_search_result()
+
+    def _on_youtube_music_save_search_result_button(self):
+        self._save_youtube_music_search_result()
+
+    def _on_youtube_music_add_search_result_to_playlist_button(self):
+        self._add_youtube_music_search_result_to_playlist()
+
+    def _selected_youtube_music_search_result(self):
+        panel = self._get_youtube_music_panel()
+        if panel is None:
+            return None
+        return panel.get_selected_search_result()
+
+    def _open_youtube_music_search_result(self):
+        search_result = self._selected_youtube_music_search_result()
+        if search_result is None:
+            self._announce("Selecione um resultado da busca para abrir ou tocar.")
+            return False
+
+        if getattr(search_result, "playlist_id", None):
+            return self._load_youtube_music_playlist_by_id(
+                search_result.playlist_id,
+                fallback_title=search_result.title,
+            )
+
+        playback_url = str(getattr(search_result, "playback_url", "") or "").strip()
+        if not playback_url:
+            self._announce("O resultado selecionado não tem uma URL reproduzível no momento.")
+            return False
+
+        self._open_prepared_media_playlist(
+            [playback_url],
+            search_result.title,
+            browser_item_labels=[search_result.choice_label],
+            announce_message=f"Resultado carregado: {search_result.choice_label}.",
+        )
+        return True
+
+    def _save_youtube_music_search_result(self):
+        search_result = self._selected_youtube_music_search_result()
+        if search_result is None:
+            self._announce("Selecione um resultado da busca para salvar ou curtir.")
+            return False
+
+        service = self._get_youtube_music_service()
+        if not service.has_saved_browser_auth() and not self._ensure_youtube_music_authenticated():
+            return False
+
+        def worker():
+            return service.save_search_result(search_result)
+
+        def on_success(message):
+            normalized_message = str(message or "Resultado salvo no YouTube Music.").strip()
+            self._youtube_music_library_status_message = normalized_message
+            self._refresh_youtube_music_screen_later()
+            self._announce(normalized_message)
+            if getattr(search_result, "result_type", "") == "playlist":
+                self.on_refresh_youtube_music_library(None, announce=False)
+
+        def on_error(exc):
+            wx.MessageBox(
+                f"Não foi possível salvar o resultado no YouTube Music.\n\nDetalhes: {exc}",
+                "YouTube Music",
+                wx.OK | wx.ICON_ERROR,
+                self,
+            )
+
+        return self._run_youtube_music_background_task(worker, on_success, on_error=on_error)
+
+    def _rate_current_youtube_music_media(self, rating):
+        state = self._get_playlist_state()
+        media_path = str(getattr(state, "current_media_path", "") or "").strip() if state is not None else ""
+        if not media_path:
+            self._announce("Nenhuma mídia está carregada para avaliar.")
+            return False
+
+        if not is_youtube_music_media(media_path):
+            self._announce("A mídia atual não veio do YouTube Music ou do YouTube.")
+            return False
+
+        service = self._get_youtube_music_service()
+        if not service.has_saved_browser_auth() and not self._ensure_youtube_music_authenticated():
+            return False
+
+        def worker():
+            return service.rate_media_feedback(media_path, rating)
+
+        def on_success(message):
+            normalized_message = str(message or "Avaliação da mídia atual enviada ao YouTube Music.").strip()
+            self._youtube_music_library_status_message = normalized_message
+            self._refresh_youtube_music_screen_later()
+            self._announce(normalized_message)
+
+        def on_error(exc):
+            wx.MessageBox(
+                f"Não foi possível avaliar a mídia atual no YouTube Music.\n\nDetalhes: {exc}",
+                "YouTube Music",
+                wx.OK | wx.ICON_ERROR,
+                self,
+            )
+
+        return self._run_youtube_music_background_task(worker, on_success, on_error=on_error)
+
+    def _add_youtube_music_search_result_to_playlist(self):
+        search_result = self._selected_youtube_music_search_result()
+        if search_result is None:
+            self._announce("Selecione um resultado da busca para adicionar a uma playlist.")
+            return False
+
+        panel = self._get_youtube_music_panel()
+        target_playlist_id = panel.get_selected_playlist_id() if panel is not None else None
+        if not target_playlist_id:
+            self._announce("Selecione primeiro uma playlist da biblioteca para receber o resultado escolhido.")
+            return False
+
+        service = self._get_youtube_music_service()
+        if not service.has_saved_browser_auth() and not self._ensure_youtube_music_authenticated():
+            return False
+
+        playlist_summary = self._playlist_summary_by_id(target_playlist_id)
+        target_playlist_title = playlist_summary.title if playlist_summary is not None else target_playlist_id
+
+        def worker():
+            return service.add_search_result_to_playlist(search_result, target_playlist_id)
+
+        def on_success(message):
+            normalized_message = str(message or "Resultado adicionado à playlist do YouTube Music.").strip()
+            combined_message = f"{normalized_message} Destino: {target_playlist_title}."
+            self._youtube_music_library_status_message = combined_message
+            self._refresh_youtube_music_screen_later()
+            self._announce(combined_message)
+
+        def on_error(exc):
+            wx.MessageBox(
+                f"Não foi possível adicionar o resultado à playlist selecionada.\n\nDetalhes: {exc}",
+                "YouTube Music",
+                wx.OK | wx.ICON_ERROR,
+                self,
+            )
+
+        return self._run_youtube_music_background_task(worker, on_success, on_error=on_error)
+
+    def on_search_youtube_music(self, _event=None):
+        panel = self._get_youtube_music_panel()
+        if panel is None:
+            return False
+
+        query = panel.get_search_query()
+        if not query:
+            self._announce("Digite algo para pesquisar no YouTube Music ou no YouTube.")
+            return False
+
+        search_scope_id = panel.get_search_scope_id()
+        scope_option = get_search_scope_option(search_scope_id)
+        if scope_option.requires_auth and not self._ensure_youtube_music_authenticated():
+            return False
+
+        service = self._get_youtube_music_service()
+        self._announce(f"Pesquisando em {scope_option.label}: {query}.")
+
+        def worker():
+            return service.search(query, search_scope=search_scope_id)
+
+        def on_success(search_results):
+            result_count = len(search_results)
+            if result_count == 0:
+                search_summary = f"Busca em {scope_option.label}: nenhum resultado para {query}."
+            else:
+                search_summary = (
+                    f"Busca em {scope_option.label}: {result_count} resultado(s) para {query}."
+                )
+            self._set_youtube_music_search_results(
+                search_results,
+                search_summary=search_summary,
+                status_message=search_summary,
+            )
+            self._announce(search_summary)
+
+        def on_error(exc):
+            wx.MessageBox(
+                f"Não foi possível concluir a busca agora.\n\nDetalhes: {exc}",
+                "YouTube Music",
+                wx.OK | wx.ICON_ERROR,
+                self,
+            )
+
+        return self._run_youtube_music_background_task(worker, on_success, on_error=on_error)
 
     def on_refresh_youtube_music_library(self, _event=None, announce=True):
         if not self._ensure_youtube_music_authenticated():

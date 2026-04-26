@@ -8,16 +8,19 @@ from .auth import (
     prepare_browser_auth_input,
     read_auth_file_text,
 )
-from .models import YouTubeMusicPlaylistContent, YouTubeMusicPlaylistSummary
+from .models import YouTubeMusicPlaylistContent, YouTubeMusicPlaylistSummary, get_search_scope_option
 from .playlists import (
     build_playlist_source as build_playlist_source_fn,
     build_watch_url as build_watch_url_fn,
+    extract_video_id_from_text,
     extract_personalized_mix_summaries,
+    is_music_youtube_url,
     is_watch_playlist_id,
     is_youtube_music_media as is_youtube_music_media_fn,
     playlist_track_count_text,
     track_display_label,
 )
+from .search import normalize_music_search_results, search_youtube_videos
 from .streams import resolve_stream_url as resolve_music_stream_url
 
 
@@ -184,6 +187,23 @@ class YouTubeMusicService:
         account_info = self.get_account_info()
         return str(account_info.get("accountName") or account_info.get("channelHandle") or "Conta do YouTube Music").strip()
 
+    def search(self, query, *, search_scope):
+        normalized_query = str(query or "").strip()
+        if not normalized_query:
+            return []
+
+        scope_option = get_search_scope_option(search_scope)
+        if scope_option.requires_auth:
+            client = self.get_client()
+            raw_results = client.search(
+                normalized_query,
+                filter=scope_option.music_filter or None,
+                limit=scope_option.limit,
+            )
+            return normalize_music_search_results(raw_results)
+
+        return search_youtube_videos(normalized_query, limit=scope_option.limit)
+
     def get_library_playlists(self):
         client = self.get_client()
         try:
@@ -267,6 +287,98 @@ class YouTubeMusicService:
 
         self._client = YTMusic(self.browser_auth_file_path)
         return self._client
+
+    def save_search_result(self, search_result):
+        client = self.get_client()
+
+        result_type = str(getattr(search_result, "result_type", "") or "").strip().lower()
+        playlist_id = str(getattr(search_result, "playlist_id", "") or "").strip()
+        video_id = str(getattr(search_result, "video_id", "") or "").strip()
+        feedback_add_token = str(getattr(search_result, "feedback_add_token", "") or "").strip()
+        feedback_remove_token = str(getattr(search_result, "feedback_remove_token", "") or "").strip()
+
+        try:
+            from ytmusicapi import LikeStatus
+        except ImportError as exc:
+            raise RuntimeError(
+                "A dependência ytmusicapi não está instalada. Atualize o ambiente com o requirements.txt."
+            ) from exc
+
+        if result_type == "playlist" and playlist_id:
+            client.rate_playlist(playlist_id, LikeStatus.LIKE)
+            return "Playlist salva na biblioteca do YouTube Music."
+
+        if result_type == "song":
+            if feedback_remove_token and not feedback_add_token:
+                return "A faixa já estava salva na biblioteca do YouTube Music."
+            if feedback_add_token:
+                client.edit_song_library_status([feedback_add_token])
+                return "Faixa salva na biblioteca do YouTube Music."
+
+        if video_id:
+            client.rate_song(video_id, LikeStatus.LIKE)
+            return "Resultado curtido no YouTube Music."
+
+        raise RuntimeError("O resultado selecionado não pode ser salvo no YouTube Music.")
+
+    def rate_media_feedback(self, media_path, rating):
+        normalized_media_path = self._normalize_stream_cache_key(media_path)
+        video_id = extract_video_id_from_text(normalized_media_path)
+        if not video_id:
+            raise RuntimeError("A mídia atual não tem um vídeo compatível para curtir ou marcar como não gostei.")
+
+        try:
+            from ytmusicapi import LikeStatus
+        except ImportError as exc:
+            raise RuntimeError(
+                "A dependência ytmusicapi não está instalada. Atualize o ambiente com o requirements.txt."
+            ) from exc
+
+        normalized_rating = str(rating or "").strip().upper()
+        rating_map = {
+            "LIKE": LikeStatus.LIKE,
+            "DISLIKE": LikeStatus.DISLIKE,
+            "INDIFFERENT": LikeStatus.INDIFFERENT,
+        }
+        like_status = rating_map.get(normalized_rating)
+        if like_status is None:
+            raise RuntimeError("A avaliação solicitada para a mídia atual é inválida.")
+
+        client = self.get_client()
+        client.rate_song(video_id, like_status)
+        if like_status == LikeStatus.LIKE:
+            return "Mídia atual curtida no YouTube Music."
+        if like_status == LikeStatus.DISLIKE:
+            return "Mídia atual marcada como não gostei no YouTube Music."
+        return "Avaliação da mídia atual removida no YouTube Music."
+
+    def add_search_result_to_playlist(self, search_result, target_playlist_id):
+        client = self.get_client()
+
+        normalized_target_playlist_id = str(target_playlist_id or "").strip()
+        if not normalized_target_playlist_id:
+            raise RuntimeError("Selecione uma playlist de destino do YouTube Music.")
+
+        video_id = str(getattr(search_result, "video_id", "") or "").strip()
+        if not video_id:
+            raise RuntimeError("O resultado selecionado não tem um vídeo reproduzível para adicionar.")
+
+        client.add_playlist_items(normalized_target_playlist_id, [video_id])
+        return "Resultado adicionado à playlist selecionada do YouTube Music."
+
+    def report_playback_to_history(self, media_path):
+        normalized_media_path = self._normalize_stream_cache_key(media_path)
+        if not is_music_youtube_url(normalized_media_path):
+            return False
+
+        video_id = extract_video_id_from_text(normalized_media_path)
+        if not video_id:
+            return False
+
+        client = self.get_client()
+        song = client.get_song(video_id)
+        response = client.add_history_item(song)
+        return getattr(response, "status_code", None) == 204
 
     def resolve_stream_url(self, media_path):
         normalized_media_path = self._normalize_stream_cache_key(media_path)

@@ -299,6 +299,9 @@ class FrameCommandMixin:
         state = self._get_playlist_state()
         self._cancel_crossfade_transition(stop_incoming=True, stop_outgoing=True, invalidate_requests=True)
         self._stop_all_players(unload=False)
+        clear_youtube_music_history_tracking = getattr(self, "_clear_youtube_music_history_tracking", None)
+        if callable(clear_youtube_music_history_tracking):
+            clear_youtube_music_history_tracking()
         if state:
             state.was_playing = False
             state.last_position_ms = 0
@@ -439,6 +442,9 @@ class FrameCommandMixin:
 
     def on_progress_timer(self, _event):
         self._update_time_bar()
+        maybe_report_youtube_music_history = getattr(self, "_maybe_report_youtube_music_history", None)
+        if callable(maybe_report_youtube_music_history):
+            maybe_report_youtube_music_history()
 
     def on_crossfade_timer(self, _event):
         self._handle_playback_timer_tick()
@@ -628,6 +634,18 @@ class FrameCommandMixin:
             return
 
         if event.ControlDown() and key_code in (ord("L"), ord("l")):
+            if event.ShiftDown():
+                rate_current_youtube_music_media = getattr(self, "_rate_current_youtube_music_media", None)
+                if callable(rate_current_youtube_music_media):
+                    rate_current_youtube_music_media("DISLIKE")
+                    return
+            else:
+                rate_current_youtube_music_media = getattr(self, "_rate_current_youtube_music_media", None)
+                if callable(rate_current_youtube_music_media):
+                    rate_current_youtube_music_media("LIKE")
+                    return
+
+        if event.ControlDown() and key_code in (ord("B"), ord("b")):
             self.on_toggle_playlist_browser(None)
             return
 

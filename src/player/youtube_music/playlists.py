@@ -6,6 +6,7 @@ from .models import YouTubeMusicPlaylistSummary
 
 YTMUSIC_SOURCE_PREFIX = "ytmusic://"
 PLAYLIST_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{8,}$")
+VIDEO_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{11}$")
 
 
 def playlist_track_count_text(item):
@@ -95,6 +96,14 @@ def build_watch_url(video_id, playlist_id=None):
     return f"https://music.youtube.com/watch?{urlencode(query_items)}"
 
 
+def build_youtube_watch_url(video_id):
+    normalized_video_id = str(video_id or "").strip()
+    if not normalized_video_id:
+        raise RuntimeError("O vídeo do YouTube não tem videoId válido.")
+
+    return f"https://www.youtube.com/watch?{urlencode([('v', normalized_video_id)])}"
+
+
 def build_playlist_source(playlist_id):
     normalized_playlist_id = str(playlist_id or "").strip()
     source_kind = "mix" if is_watch_playlist_id(normalized_playlist_id) else "playlist"
@@ -142,6 +151,38 @@ def extract_playlist_id_from_text(source_text):
     return None
 
 
+def extract_video_id_from_text(source_text):
+    normalized_source_text = str(source_text or "").strip()
+    if not normalized_source_text:
+        return None
+
+    parsed_source = urlparse(normalized_source_text)
+    if parsed_source.scheme or parsed_source.netloc:
+        host = (parsed_source.netloc or "").lower()
+        if host == "youtu.be":
+            video_id = str(parsed_source.path or "").strip("/")
+            return video_id or None
+
+        video_id_candidates = parse_qs(parsed_source.query).get("v") or []
+        for candidate in video_id_candidates:
+            normalized_candidate = str(candidate or "").strip()
+            if normalized_candidate:
+                return normalized_candidate
+
+        path_segments = [segment for segment in str(parsed_source.path or "").split("/") if segment]
+        if len(path_segments) >= 2 and path_segments[0] in {"shorts", "embed", "live"}:
+            return path_segments[1]
+        return None
+
+    if any(character.isspace() for character in normalized_source_text):
+        return None
+
+    if VIDEO_ID_PATTERN.match(normalized_source_text):
+        return normalized_source_text
+
+    return None
+
+
 def is_youtube_music_media(media_path):
     normalized_media_path = str(media_path or "").strip()
     if not normalized_media_path:
@@ -153,6 +194,16 @@ def is_youtube_music_media(media_path):
         return True
 
     return normalized_media_path.lower().startswith(YTMUSIC_SOURCE_PREFIX)
+
+
+def is_music_youtube_url(media_path):
+    normalized_media_path = str(media_path or "").strip()
+    if not normalized_media_path:
+        return False
+
+    parsed_url = urlparse(normalized_media_path)
+    host = (parsed_url.netloc or "").lower()
+    return host == "music.youtube.com"
 
 
 def track_display_label(track):

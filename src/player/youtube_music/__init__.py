@@ -1,26 +1,47 @@
 from .auth import YTMUSIC_BROWSER_AUTH_FILE_NAME, get_browser_auth_file_path, prepare_browser_auth_input, read_auth_file_text
 from .dialog import YouTubeMusicBrowserAuthDialog
-from .models import YOUTUBE_MUSIC_SCREEN_ID, YouTubeMusicPlaylistContent, YouTubeMusicPlaylistSummary
+from .models import (
+    YOUTUBE_MUSIC_SCREEN_ID,
+    YOUTUBE_SEARCH_SCOPE_MUSIC_PLAYLISTS,
+    YOUTUBE_SEARCH_SCOPE_MUSIC_SONGS,
+    YOUTUBE_SEARCH_SCOPE_MUSIC_VIDEOS,
+    YOUTUBE_SEARCH_SCOPE_OPTIONS,
+    YOUTUBE_SEARCH_SCOPE_YOUTUBE_VIDEOS,
+    YouTubeMediaSearchResult,
+    YouTubeMusicPlaylistContent,
+    YouTubeMusicPlaylistSummary,
+    get_search_scope_option,
+)
 from .panel import YouTubeMusicTabPanel
 from .playlists import (
     YTMUSIC_SOURCE_PREFIX,
     build_playlist_source,
+    build_youtube_watch_url,
     extract_playlist_id_from_text,
+    extract_video_id_from_text,
     build_watch_url,
     extract_playlist_id_from_source,
     extract_personalized_mix_summaries,
+    is_music_youtube_url,
     is_watch_playlist_id,
     is_youtube_music_media,
     playlist_track_count_text,
     track_display_label,
 )
+from .search import normalize_music_search_results, search_youtube_videos
 from .service import YouTubeMusicService
 from .streams import resolve_stream_url
 
 __all__ = [
     "YTMUSIC_BROWSER_AUTH_FILE_NAME",
     "YOUTUBE_MUSIC_SCREEN_ID",
+    "YOUTUBE_SEARCH_SCOPE_MUSIC_PLAYLISTS",
+    "YOUTUBE_SEARCH_SCOPE_MUSIC_SONGS",
+    "YOUTUBE_SEARCH_SCOPE_MUSIC_VIDEOS",
+    "YOUTUBE_SEARCH_SCOPE_OPTIONS",
+    "YOUTUBE_SEARCH_SCOPE_YOUTUBE_VIDEOS",
     "YTMUSIC_SOURCE_PREFIX",
+    "YouTubeMediaSearchResult",
     "YouTubeMusicBrowserAuthDialog",
     "YouTubeMusicPlaylistContent",
     "YouTubeMusicPlaylistSummary",
@@ -28,15 +49,21 @@ __all__ = [
     "YouTubeMusicService",
     "build_playlist_source",
     "build_watch_url",
+    "build_youtube_watch_url",
     "extract_playlist_id_from_text",
+    "extract_video_id_from_text",
     "extract_playlist_id_from_source",
     "extract_personalized_mix_summaries",
+    "get_search_scope_option",
     "get_browser_auth_file_path",
+    "is_music_youtube_url",
     "is_watch_playlist_id",
     "is_youtube_music_media",
+    "normalize_music_search_results",
     "playlist_track_count_text",
     "prepare_browser_auth_input",
     "read_auth_file_text",
     "resolve_stream_url",
+    "search_youtube_videos",
     "track_display_label",
 ]
