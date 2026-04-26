@@ -3,7 +3,7 @@ import sys
 
 import wx
 
-from ..audio_output import normalize_audio_output_device_id
+from ..audio_output import is_selectable_audio_output_device_id, normalize_audio_output_device_id
 from ..constants import MAX_CROSSFADE_SECONDS, REPEAT_MODE_LABELS, REPEAT_MODES
 
 
@@ -318,11 +318,13 @@ class PreferencesDialog(wx.Dialog):
         labels = ["Padrão do sistema"]
 
         selected_device_id = normalize_audio_output_device_id(getattr(self._settings, "audio_output_device_id", ""))
+        if not is_selectable_audio_output_device_id(selected_device_id):
+            selected_device_id = ""
         seen_ids = {""}
 
         for device in self._audio_output_devices:
             device_id = normalize_audio_output_device_id(getattr(device, "device_id", ""))
-            if not device_id or device_id in seen_ids:
+            if not is_selectable_audio_output_device_id(device_id) or device_id in seen_ids:
                 continue
             labels.append(getattr(device, "menu_label", device_id))
             self._audio_output_choice_ids.append(device_id)
@@ -351,6 +353,8 @@ class PreferencesDialog(wx.Dialog):
         self.repeat_mode_choice.SetSelection(repeat_mode_index)
 
         selected_audio_output_device_id = normalize_audio_output_device_id(settings.audio_output_device_id)
+        if not is_selectable_audio_output_device_id(selected_audio_output_device_id):
+            selected_audio_output_device_id = ""
         try:
             audio_output_index = self._audio_output_choice_ids.index(selected_audio_output_device_id)
         except ValueError:

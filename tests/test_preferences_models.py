@@ -23,6 +23,15 @@ class AppSettingsTests(unittest.TestCase):
         self.assertEqual(payload["audio_output_device_id"], "wasapi/{device-1}")
         self.assertEqual(restored_settings.audio_output_device_id, "wasapi/{device-1}")
 
+    def test_generic_audio_backend_is_not_persisted_as_device(self):
+        settings = AppSettings(audio_output_device_id="openal")
+
+        payload = settings.to_dict()
+        restored_settings = AppSettings.from_dict(payload)
+
+        self.assertEqual(payload["audio_output_device_id"], "")
+        self.assertEqual(restored_settings.audio_output_device_id, "")
+
 
 if __name__ == "__main__":
     unittest.main()

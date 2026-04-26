@@ -115,6 +115,9 @@ class MPVPlayerTests(unittest.TestCase):
 
     def test_lists_available_audio_output_devices(self):
         player = mpv_backend.MPVPlayer(video_output_enabled=False)
+        self.fake_module.created_players[0].audio_device_list.append(
+            {"name": "openal", "description": "Default (openal)"}
+        )
 
         devices = player.list_audio_output_devices()
 
@@ -141,13 +144,37 @@ class MPVPlayerTests(unittest.TestCase):
         self.assertNotIn("audio_device", core.created_with_kwargs)
         self.assertIn(("audio-device", "wasapi/{device-1}"), core.option_sets)
 
+    def test_applies_system_default_audio_output_after_player_creation(self):
+        mpv_backend.MPVPlayer(video_output_enabled=False)
+
+        core = self.fake_module.created_players[0]
+        expected_option = "wasapi" if mpv_backend.sys.platform.startswith("win") else "auto"
+
+        self.assertIn(("audio-device", expected_option), core.option_sets)
+
+
     def test_normalizes_default_audio_output_device(self):
         player = mpv_backend.MPVPlayer(video_output_enabled=False)
         core = self.fake_module.created_players[0]
+        expected_option = "wasapi" if mpv_backend.sys.platform.startswith("win") else "auto"
 
         player.set_audio_output_device("")
 
-        self.assertEqual(core.audio_device, "auto")
+        self.assertEqual(core.audio_device, expected_option)
+        self.assertEqual(player.get_audio_output_device(), "")
+
+    def test_ignores_generic_backend_as_selected_audio_device(self):
+        player = mpv_backend.MPVPlayer(video_output_enabled=False)
+        core = self.fake_module.created_players[0]
+        core.audio_device = "openal"
+
+        self.assertEqual(player.get_audio_output_device(), "")
+
+    def test_treats_wasapi_default_backend_as_system_default_selection(self):
+        player = mpv_backend.MPVPlayer(video_output_enabled=False)
+        core = self.fake_module.created_players[0]
+        core.audio_device = "wasapi"
+
         self.assertEqual(player.get_audio_output_device(), "")
 
 

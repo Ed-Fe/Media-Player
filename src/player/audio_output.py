@@ -27,12 +27,21 @@ def normalize_audio_output_device_id(value) -> str:
 	return normalized_value
 
 
+def is_selectable_audio_output_device_id(value) -> bool:
+	normalized_value = normalize_audio_output_device_id(value)
+	if not normalized_value:
+		return False
+	return "/" in normalized_value or "\\" in normalized_value
+
+
 def audio_output_device_from_mpv_entry(entry) -> AudioOutputDevice | None:
 	if not isinstance(entry, dict):
 		return None
 
 	raw_device_id = entry.get("name")
 	device_id = normalize_audio_output_device_id(raw_device_id)
+	if not is_selectable_audio_output_device_id(device_id):
+		return None
 	normalized_name = str(raw_device_id or "").strip()
 	normalized_description = str(entry.get("description") or "").strip()
 	if not device_id and not normalized_name and not normalized_description:

@@ -7,7 +7,7 @@ import time
 
 import wx
 
-from ..audio_output import normalize_audio_output_device_id
+from ..audio_output import is_selectable_audio_output_device_id, normalize_audio_output_device_id
 from ..constants import PROGRESS_GAUGE_RANGE, RESTORE_DELAY_MS
 from ..library import folder_display_name, is_audio_playback_media
 from ..mpv_backend import PlayerEventType, create_player_instance
@@ -24,7 +24,10 @@ class FramePlaybackMixin:
         return not bool(getattr(self.settings, "disable_video_output", False))
 
     def _selected_audio_output_device_id(self):
-        return normalize_audio_output_device_id(getattr(self.settings, "audio_output_device_id", ""))
+        selected_device_id = normalize_audio_output_device_id(getattr(self.settings, "audio_output_device_id", ""))
+        if not is_selectable_audio_output_device_id(selected_device_id):
+            return ""
+        return selected_device_id
 
     def _initialize_player_state(self):
         self._bind_player_to_window()
@@ -90,12 +93,17 @@ class FramePlaybackMixin:
             return ""
 
         try:
-            return normalize_audio_output_device_id(player.get_audio_output_device())
+            current_device_id = normalize_audio_output_device_id(player.get_audio_output_device())
+            if not is_selectable_audio_output_device_id(current_device_id):
+                return ""
+            return current_device_id
         except Exception:
             return ""
 
     def _apply_audio_output_device_to_players(self, device_id):
         normalized_device_id = normalize_audio_output_device_id(device_id)
+        if normalized_device_id and not is_selectable_audio_output_device_id(normalized_device_id):
+            normalized_device_id = ""
         applied_to_any_player = False
         for player_key in getattr(self, "_player_keys", ()): 
             player = self._managed_player(player_key)
@@ -108,9 +116,13 @@ class FramePlaybackMixin:
 
     def _set_audio_output_device(self, device_id, *, announce=True, previous_device_id=None):
         normalized_device_id = normalize_audio_output_device_id(device_id)
+        if normalized_device_id and not is_selectable_audio_output_device_id(normalized_device_id):
+            normalized_device_id = ""
         previous_normalized_device_id = normalize_audio_output_device_id(
             previous_device_id if previous_device_id is not None else getattr(self.settings, "audio_output_device_id", "")
         )
+        if previous_normalized_device_id and not is_selectable_audio_output_device_id(previous_normalized_device_id):
+            previous_normalized_device_id = ""
 
         try:
             self._apply_audio_output_device_to_players(normalized_device_id)

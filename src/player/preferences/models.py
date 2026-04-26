@@ -1,5 +1,6 @@
 from dataclasses import dataclass, field
 
+from ..audio_output import is_selectable_audio_output_device_id, normalize_audio_output_device_id
 from ..constants import (
     DEFAULT_ANNOUNCEMENTS_ENABLED,
     DEFAULT_CONFIRM_ON_EXIT,
@@ -52,7 +53,9 @@ class AppSettings:
             "confirm_on_exit": self.confirm_on_exit,
             "announcements_enabled": self.announcements_enabled,
             "disable_video_output": self.disable_video_output,
-            "audio_output_device_id": self.audio_output_device_id,
+            "audio_output_device_id": (
+                self.audio_output_device_id if is_selectable_audio_output_device_id(self.audio_output_device_id) else ""
+            ),
             "default_volume": self.default_volume,
             "crossfade_seconds": self.crossfade_seconds,
             "volume_step": self.volume_step,
@@ -75,7 +78,10 @@ class AppSettings:
         settings.confirm_on_exit = bool(data.get("confirm_on_exit", settings.confirm_on_exit))
         settings.announcements_enabled = bool(data.get("announcements_enabled", settings.announcements_enabled))
         settings.disable_video_output = bool(data.get("disable_video_output", settings.disable_video_output))
-        settings.audio_output_device_id = str(data.get("audio_output_device_id") or "").strip()
+        raw_audio_output_device_id = normalize_audio_output_device_id(data.get("audio_output_device_id"))
+        settings.audio_output_device_id = (
+            raw_audio_output_device_id if is_selectable_audio_output_device_id(raw_audio_output_device_id) else ""
+        )
         settings.default_volume = _clamp_int(data.get("default_volume"), minimum=0, maximum=100, fallback=settings.default_volume)
         settings.crossfade_seconds = _clamp_int(
             data.get("crossfade_seconds"),

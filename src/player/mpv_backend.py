@@ -1,11 +1,17 @@
 from __future__ import annotations
 
 import importlib
+import sys
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Callable
 
-from .audio_output import AudioOutputDevice, audio_output_device_from_mpv_entry, normalize_audio_output_device_id
+from .audio_output import (
+    AudioOutputDevice,
+    audio_output_device_from_mpv_entry,
+    is_selectable_audio_output_device_id,
+    normalize_audio_output_device_id,
+)
 
 
 _mpv_module = None
@@ -73,13 +79,16 @@ class MPVPlayer:
                 "Não foi possível iniciar uma instância do MPV. "
                 f"Detalhes: {exc}"
             ) from exc
-        initial_audio_output_device_id = normalize_audio_output_device_id(audio_output_device_id)
-        if initial_audio_output_device_id:
-            try:
-                self.set_audio_output_device(initial_audio_output_device_id)
-            except Exception:
-                pass
+        try:
+            self.set_audio_output_device(audio_output_device_id)
+        except Exception:
+            pass
         self._register_callbacks()
+
+    def _default_audio_output_option_value(self) -> str:
+        if sys.platform.startswith("win"):
+            return "wasapi"
+        return "auto"
 
     def _get_option(self, option_name: str, default=None):
         try:
@@ -231,12 +240,26 @@ class MPVPlayer:
         return devices
 
     def get_audio_output_device(self) -> str:
-        current_device = self._get_option("audio-device", default="")
-        return normalize_audio_output_device_id(current_device)
+        current_device = str(self._get_option("audio-device", default="") or "").strip()
+        if not current_device:
+            return ""
+        if current_device.casefold() in {"auto", "default"}:
+            return ""
+        if sys.platform.startswith("win") and current_device.casefold() == "wasapi":
+            return ""
+        normalized_device = normalize_audio_output_device_id(current_device)
+        if not is_selectable_audio_output_device_id(normalized_device):
+            return ""
+        return normalized_device
 
     def set_audio_output_device(self, device_id: str):
         normalized_device_id = normalize_audio_output_device_id(device_id)
-        self._set_option("audio-device", normalized_device_id or "auto")
+        if normalized_device_id and not is_selectable_audio_output_device_id(normalized_device_id):
+            normalized_device_id = ""
+        self._set_option(
+            "audio-device",
+            normalized_device_id or self._default_audio_output_option_value(),
+        )
 
     def get_time(self):
         time_pos = self._player.time_pos

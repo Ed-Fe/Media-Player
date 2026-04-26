@@ -10,7 +10,11 @@ SRC_ROOT = PROJECT_ROOT / "src"
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
-from player.audio_output import audio_output_device_from_mpv_entry, normalize_audio_output_device_id
+from player.audio_output import (
+    audio_output_device_from_mpv_entry,
+    is_selectable_audio_output_device_id,
+    normalize_audio_output_device_id,
+)
 
 
 class AudioOutputHelperTests(unittest.TestCase):
@@ -30,6 +34,18 @@ class AudioOutputHelperTests(unittest.TestCase):
         self.assertIsNotNone(device)
         self.assertEqual(device.device_id, "wasapi/{device-1}")
         self.assertEqual(device.menu_label, "Fones Bluetooth")
+
+    def test_filters_generic_backend_entries(self):
+        self.assertFalse(is_selectable_audio_output_device_id("openal"))
+        self.assertTrue(is_selectable_audio_output_device_id("wasapi/{device-1}"))
+        self.assertIsNone(
+            audio_output_device_from_mpv_entry(
+                {
+                    "name": "openal",
+                    "description": "Default (openal)",
+                }
+            )
+        )
 
 
 if __name__ == "__main__":
