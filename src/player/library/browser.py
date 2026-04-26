@@ -76,7 +76,7 @@ class PlaylistBrowserPanel(wx.Panel):
         )
         self.hint_label = wx.StaticText(
             self,
-            label="Enter toca o item selecionado. Delete remove. Digite letras para localizar. F6 volta ao player.",
+            label="Enter toca o item selecionado. Delete remove. Digite letras para localizar. Tab volta ao player.",
         )
         self.hint_label.Wrap(260)
 
@@ -103,7 +103,7 @@ class PlaylistBrowserPanel(wx.Panel):
             self._show_placeholder(playlist_state.loading_message or "Carregando playlist...")
             self._set_list_selection(wx.NOT_FOUND, ensure_visible=False)
             self.header_label.SetLabel(f"{playlist_state.title} — carregando")
-            self.hint_label.SetLabel("Aguarde o carregamento da playlist. F6 volta ao player.")
+            self.hint_label.SetLabel("Aguarde o carregamento da playlist. Tab volta ao player.")
             self.hint_label.Wrap(260)
             self._render_mode = "playlist"
             self._playlist_items_revision = playlist_state.items_revision
@@ -148,7 +148,7 @@ class PlaylistBrowserPanel(wx.Panel):
             f"{playlist_state.title} — {len(playlist_state.items)} item(ns)"
         )
         self.hint_label.SetLabel(
-            "Enter toca o item selecionado. Delete remove. Digite letras para localizar. F6 volta ao player."
+            "Enter toca o item selecionado. Delete remove. Digite letras para localizar. Tab volta ao player."
         )
         self.hint_label.Wrap(260)
         self._render_mode = "playlist"
@@ -182,7 +182,7 @@ class PlaylistBrowserPanel(wx.Panel):
             self._set_list_selection(wx.NOT_FOUND, ensure_visible=False)
             self._folder_index_by_key = {}
             self.header_label.SetLabel(f"{title} — {current_path}")
-            self.hint_label.SetLabel("Aguarde o carregamento da pasta. F6 volta ao player.")
+            self.hint_label.SetLabel("Aguarde o carregamento da pasta. Tab volta ao player.")
             self.hint_label.Wrap(260)
             self._render_mode = "folder"
             self._folder_entries_revision = entries_revision
@@ -222,7 +222,7 @@ class PlaylistBrowserPanel(wx.Panel):
 
         self.header_label.SetLabel(f"{title} — {current_path}")
         self.hint_label.SetLabel(
-            "Enter entra na pasta ou toca o arquivo. Backspace volta. Digite letras para localizar. F6 volta ao player."
+            "Enter entra na pasta ou toca o arquivo. Backspace volta. Digite letras para localizar. Tab volta ao player."
         )
         self.hint_label.Wrap(260)
         self._render_mode = "folder"
@@ -471,7 +471,7 @@ class PlaylistBrowserPanel(wx.Panel):
         key_code = event.GetKeyCode()
         character = self._character_from_event(event)
 
-        if key_code == wx.WXK_F6:
+        if key_code == wx.WXK_TAB:
             if self._on_toggle_navigation_mode:
                 self._on_toggle_navigation_mode()
             return

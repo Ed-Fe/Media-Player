@@ -4,9 +4,16 @@ import threading
 
 import wx
 
-from player.youtube_music import YouTubeMusicBrowserAuthDialog, YouTubeMusicService, extract_playlist_id_from_source
+from player.youtube_music import (
+    YOUTUBE_MUSIC_SCREEN_ID,
+    YouTubeMusicBrowserAuthDialog,
+    YouTubeMusicService,
+    YouTubeMusicTabPanel,
+    extract_playlist_id_from_source,
+    extract_playlist_id_from_text,
+)
 
-from ..playlists import PlaylistState
+from ..playlists import PlaylistState, ScreenTabState
 
 
 class FrameYouTubeMusicMixin:
@@ -66,6 +73,93 @@ class FrameYouTubeMusicMixin:
             self._youtube_music_service = service
         return service
 
+    def _youtube_music_account_name(self):
+        return str(getattr(self, "_youtube_music_connected_account_name", "") or "").strip()
+
+    def _set_youtube_music_account_name(self, account_name):
+        self._youtube_music_connected_account_name = str(account_name or "").strip()
+
+    def _youtube_music_library_cache(self):
+        return list(getattr(self, "_youtube_music_library_playlists", []))
+
+    def _set_youtube_music_library_cache(self, playlists, *, status_message=None):
+        self._youtube_music_library_playlists = list(playlists or [])
+        self._youtube_music_library_loaded = True
+        if status_message is not None:
+            self._youtube_music_library_status_message = str(status_message or "").strip()
+        self._refresh_youtube_music_screen_later()
+
+    def _clear_youtube_music_library_cache(self, *, loaded=False, status_message=None):
+        self._youtube_music_library_playlists = []
+        self._youtube_music_library_loaded = bool(loaded)
+        if status_message is not None:
+            self._youtube_music_library_status_message = str(status_message or "").strip()
+        self._refresh_youtube_music_screen_later()
+
+    def _youtube_music_library_has_loaded(self):
+        return bool(getattr(self, "_youtube_music_library_loaded", False))
+
+    def _youtube_music_status_message(self):
+        return str(getattr(self, "_youtube_music_library_status_message", "") or "").strip()
+
+    def _create_youtube_music_page(self, parent):
+        return YouTubeMusicTabPanel(
+            parent,
+            on_connect=self._on_youtube_music_connect_button,
+            on_disconnect=self._on_youtube_music_disconnect_button,
+            on_refresh_library=self._on_youtube_music_refresh_button,
+            on_open_selected=self._on_youtube_music_open_selected_button,
+            on_open_manual_source=self._on_youtube_music_open_manual_source_button,
+        )
+
+    def _get_youtube_music_panel(self):
+        if not hasattr(self, "playlists") or not hasattr(self, "notebook"):
+            return None
+
+        for index, state in enumerate(self.playlists):
+            if isinstance(state, ScreenTabState) and state.screen_id == YOUTUBE_MUSIC_SCREEN_ID:
+                page = self.notebook.GetPage(index)
+                if isinstance(page, YouTubeMusicTabPanel):
+                    return page
+
+        return None
+
+    def _refresh_youtube_music_screen_later(self):
+        wx.CallAfter(self._refresh_youtube_music_screen)
+
+    def _refresh_youtube_music_screen(self):
+        panel = self._get_youtube_music_panel()
+        if panel is None:
+            return
+
+        service = self._get_youtube_music_service()
+        panel.update_view(
+            connected=service.has_saved_browser_auth(),
+            account_name=self._youtube_music_account_name(),
+            playlists=self._youtube_music_library_cache(),
+            operation_in_progress=self._is_youtube_music_operation_in_progress(),
+            status_message=self._youtube_music_status_message(),
+        )
+
+    def _playlist_summary_by_id(self, playlist_id):
+        normalized_playlist_id = str(playlist_id or "").strip()
+        if not normalized_playlist_id:
+            return None
+
+        for playlist in self._youtube_music_library_cache():
+            if playlist.playlist_id == normalized_playlist_id:
+                return playlist
+
+        return None
+
+    def _ensure_youtube_music_authenticated(self):
+        service = self._get_youtube_music_service()
+        if service.has_saved_browser_auth():
+            return True
+
+        self.on_connect_youtube_music(None)
+        return service.has_saved_browser_auth()
+
     def _refresh_youtube_music_menu_state(self):
         if not hasattr(self, "youtube_music_menu"):
             return
@@ -76,7 +170,11 @@ class FrameYouTubeMusicMixin:
 
         login_item = self.youtube_music_menu.FindItemById(self.menu_youtube_music_login_id)
         disconnect_item = self.youtube_music_menu.FindItemById(self.menu_youtube_music_disconnect_id)
-        open_playlist_item = self.youtube_music_menu.FindItemById(self.menu_youtube_music_open_playlist_id)
+        open_playlist_item = self.youtube_music_menu.FindItemById(getattr(self, "menu_open_youtube_music_id", wx.ID_ANY))
+        refresh_item = self.youtube_music_menu.FindItemById(getattr(self, "menu_youtube_music_refresh_library_id", wx.ID_ANY))
+        open_tab_item = None
+        if hasattr(self, "view_menu"):
+            open_tab_item = self.view_menu.FindItemById(getattr(self, "menu_open_youtube_music_id", wx.ID_ANY))
         playback_menu = getattr(self, "playback_menu", None)
         file_menu = getattr(self, "file_menu", None)
 
@@ -88,7 +186,13 @@ class FrameYouTubeMusicMixin:
             disconnect_item.Enable(has_saved_auth and not operation_in_progress)
 
         if open_playlist_item is not None:
-            open_playlist_item.Enable(has_saved_auth and not operation_in_progress)
+            open_playlist_item.Enable(not operation_in_progress)
+
+        if refresh_item is not None:
+            refresh_item.Enable(has_saved_auth and not operation_in_progress)
+
+        if open_tab_item is not None:
+            open_tab_item.Enable(not operation_in_progress)
 
         if playback_menu is not None:
             for item_id in (
@@ -107,6 +211,8 @@ class FrameYouTubeMusicMixin:
             close_media_item = file_menu.FindItemById(getattr(self, "menu_close_media_id", None))
             if close_media_item is not None:
                 close_media_item.Enable(not operation_in_progress)
+
+        self._refresh_youtube_music_screen_later()
 
     def _set_youtube_music_operation_state(self, in_progress):
         self._youtube_music_operation_in_progress = bool(in_progress)
@@ -291,6 +397,107 @@ class FrameYouTubeMusicMixin:
 
         return self._run_youtube_music_background_task(worker, on_success, on_error=on_error)
 
+    def on_open_youtube_music(self, _event):
+        self._open_screen_tab(
+            YOUTUBE_MUSIC_SCREEN_ID,
+            "YouTube Music",
+            self._create_youtube_music_page,
+            select=True,
+            activation_message=(
+                "Aba YouTube Music. Use os controles para conectar a conta, atualizar a biblioteca "
+                "e abrir playlists ou mixes."
+            ),
+            on_activate=self._refresh_youtube_music_screen_later,
+        )
+
+        if self._get_youtube_music_service().has_saved_browser_auth() and not self._youtube_music_library_has_loaded():
+            self.on_refresh_youtube_music_library(None, announce=False)
+
+    def _on_youtube_music_connect_button(self):
+        self.on_connect_youtube_music(None)
+
+    def _on_youtube_music_disconnect_button(self):
+        self.on_disconnect_youtube_music(None)
+
+    def _on_youtube_music_refresh_button(self):
+        self.on_refresh_youtube_music_library(None, announce=True)
+
+    def _on_youtube_music_open_selected_button(self):
+        panel = self._get_youtube_music_panel()
+        if panel is None:
+            return
+
+        playlist_id = panel.get_selected_playlist_id()
+        if not playlist_id:
+            self._announce("Selecione uma playlist ou mix do YouTube Music para abrir.")
+            return
+
+        playlist = self._playlist_summary_by_id(playlist_id)
+        if playlist is None:
+            self._announce("A playlist selecionada não está mais disponível na lista atual.")
+            return
+
+        self._load_youtube_music_playlist(playlist)
+
+    def _on_youtube_music_open_manual_source_button(self):
+        panel = self._get_youtube_music_panel()
+        manual_source = panel.get_manual_source() if panel is not None else ""
+        if not manual_source:
+            self._announce("Cole um link ou informe o ID da playlist ou mix que deseja abrir.")
+            return
+
+        playlist_id = extract_playlist_id_from_text(manual_source)
+        if not playlist_id:
+            wx.MessageBox(
+                "Informe um link válido do YouTube Music/YouTube ou apenas o ID da playlist ou mix.",
+                "YouTube Music",
+                wx.OK | wx.ICON_INFORMATION,
+                self,
+            )
+            return
+
+        playlist = self._playlist_summary_by_id(playlist_id)
+        fallback_title = playlist.title if playlist is not None else f"Playlist {playlist_id}"
+        self._load_youtube_music_playlist_by_id(playlist_id, fallback_title=fallback_title)
+
+    def on_refresh_youtube_music_library(self, _event=None, announce=True):
+        if not self._ensure_youtube_music_authenticated():
+            return False
+
+        service = self._get_youtube_music_service()
+        if announce:
+            self._announce("Atualizando playlists e mixes do YouTube Music.")
+
+        def worker():
+            account_name = service.get_connected_account_name()
+            playlists = service.get_library_playlists()
+            return account_name, playlists
+
+        def on_success(result):
+            account_name, playlists = result
+            self._set_youtube_music_account_name(account_name)
+            playlist_count = len(playlists)
+            summary_message = (
+                f"Biblioteca do YouTube Music atualizada: {playlist_count} playlist(s) e mix(es)."
+            )
+            self._set_youtube_music_library_cache(playlists, status_message=summary_message)
+            self._refresh_youtube_music_menu_state()
+            if announce:
+                self._announce(summary_message)
+
+        def on_error(exc):
+            self._refresh_youtube_music_menu_state()
+            self._youtube_music_library_status_message = "Não foi possível atualizar a biblioteca do YouTube Music."
+            self._refresh_youtube_music_screen_later()
+            wx.MessageBox(
+                f"Não foi possível listar as playlists do YouTube Music.\n\nDetalhes: {exc}",
+                "YouTube Music",
+                wx.OK | wx.ICON_ERROR,
+                self,
+            )
+
+        return self._run_youtube_music_background_task(worker, on_success, on_error=on_error)
+
     def on_connect_youtube_music(self, _event):
         service = self._get_youtube_music_service()
         dialog = YouTubeMusicBrowserAuthDialog(self)
@@ -318,6 +525,7 @@ class FrameYouTubeMusicMixin:
             account_name = service.get_connected_account_name()
         except Exception as exc:
             service.clear_client_cache()
+            self._set_youtube_music_account_name("")
             wx.MessageBox(
                 f"Não foi possível conectar a conta do YouTube Music.\n\nDetalhes: {exc}",
                 "YouTube Music",
@@ -327,9 +535,13 @@ class FrameYouTubeMusicMixin:
             self._refresh_youtube_music_menu_state()
             return
 
+        self._set_youtube_music_account_name(account_name)
+        self._youtube_music_library_status_message = f"Conta conectada: {account_name}."
+        self._clear_youtube_music_library_cache(loaded=False, status_message=self._youtube_music_status_message())
         self._refresh_youtube_music_menu_state()
         self._refresh_pending_restored_youtube_music_tabs()
         self._announce(f"Conta do YouTube Music conectada: {account_name}.")
+        self.on_refresh_youtube_music_library(None, announce=False)
         wx.MessageBox(
             f"Autenticação do navegador salva em:\n{saved_path}\n\nConta conectada: {account_name}",
             "YouTube Music",
@@ -354,6 +566,11 @@ class FrameYouTubeMusicMixin:
                 return
 
         service.disconnect()
+        self._set_youtube_music_account_name("")
+        self._clear_youtube_music_library_cache(
+            loaded=False,
+            status_message="A conta do YouTube Music foi desconectada desta instalação.",
+        )
         self._refresh_youtube_music_menu_state()
         self._announce("Conta do YouTube Music desconectada.")
         wx.MessageBox(
@@ -373,6 +590,9 @@ class FrameYouTubeMusicMixin:
             return service.get_connected_account_name()
 
         def on_success(account_name):
+            self._set_youtube_music_account_name(account_name)
+            if account_name:
+                self._youtube_music_library_status_message = f"Conta conectada: {account_name}."
             self._refresh_youtube_music_menu_state()
             if account_name:
                 self._announce(f"YouTube Music reconectado: {account_name}.")
@@ -380,69 +600,35 @@ class FrameYouTubeMusicMixin:
 
         def on_error(_error):
             service.clear_client_cache()
+            self._set_youtube_music_account_name("")
             self._refresh_youtube_music_menu_state()
 
         self._run_youtube_music_background_task(worker, on_success, on_error=on_error)
 
     def on_open_youtube_music_playlist(self, _event):
-        service = self._get_youtube_music_service()
-        if not service.has_saved_browser_auth():
-            self.on_connect_youtube_music(None)
-            if not service.has_saved_browser_auth():
-                return
-
-        self._announce("Buscando playlists e mixes do YouTube Music.")
-
-        def playlists_worker():
-            return service.get_library_playlists()
-
-        def playlists_success(playlists):
-            self._refresh_youtube_music_menu_state()
-            if not playlists:
-                wx.MessageBox(
-                    "Nenhuma playlist ou mix foi encontrada na conta conectada.",
-                    "YouTube Music",
-                    wx.OK | wx.ICON_INFORMATION,
-                    self,
-                )
-                return
-
-            playlist_choices = [playlist.choice_label for playlist in playlists]
-            with wx.SingleChoiceDialog(
-                self,
-                "Escolha a playlist ou mix do YouTube Music que deseja abrir.",
-                "YouTube Music",
-                playlist_choices,
-            ) as dialog:
-                if dialog.ShowModal() != wx.ID_OK:
-                    return
-                playlist_index = dialog.GetSelection()
-
-            if not 0 <= playlist_index < len(playlists):
-                return
-
-            self._load_youtube_music_playlist(playlists[playlist_index])
-
-        def playlists_error(exc):
-            service.clear_client_cache()
-            self._refresh_youtube_music_menu_state()
-            wx.MessageBox(
-                f"Não foi possível listar as playlists do YouTube Music.\n\nDetalhes: {exc}",
-                "YouTube Music",
-                wx.OK | wx.ICON_ERROR,
-                self,
-            )
-
-        self._run_youtube_music_background_task(playlists_worker, playlists_success, on_error=playlists_error)
+        self.on_open_youtube_music(None)
+        if self._get_youtube_music_service().has_saved_browser_auth():
+            self.on_refresh_youtube_music_library(None, announce=False)
 
     def _load_youtube_music_playlist(self, selected_playlist):
+        self._load_youtube_music_playlist_by_id(
+            selected_playlist.playlist_id,
+            fallback_title=selected_playlist.title,
+        )
+
+    def _load_youtube_music_playlist_by_id(self, playlist_id, *, fallback_title=""):
         service = self._get_youtube_music_service()
-        self._announce(f"Carregando playlist do YouTube Music: {selected_playlist.title}.")
+        normalized_playlist_id = str(playlist_id or "").strip()
+        if not normalized_playlist_id:
+            return False
+
+        display_title = str(fallback_title or normalized_playlist_id).strip() or normalized_playlist_id
+        self._announce(f"Carregando playlist do YouTube Music: {display_title}.")
 
         def worker():
             return service.get_playlist_content(
-                selected_playlist.playlist_id,
-                fallback_title=selected_playlist.title,
+                normalized_playlist_id,
+                fallback_title=display_title,
             )
 
         def on_success(playlist_content):
@@ -460,7 +646,7 @@ class FrameYouTubeMusicMixin:
                 playlist_content.item_urls,
                 playlist_content.title,
                 browser_item_labels=playlist_content.item_labels,
-                source_path=service.build_playlist_source(selected_playlist.playlist_id),
+                source_path=service.build_playlist_source(normalized_playlist_id),
                 announce_message=(
                     f"Playlist do YouTube Music carregada: {playlist_content.title}. "
                     f"{len(playlist_content.item_urls)} item(ns)."
@@ -477,4 +663,4 @@ class FrameYouTubeMusicMixin:
                 self,
             )
 
-        self._run_youtube_music_background_task(worker, on_success, on_error=on_error)
+        return self._run_youtube_music_background_task(worker, on_success, on_error=on_error)

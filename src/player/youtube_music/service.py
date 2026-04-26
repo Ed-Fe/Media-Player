@@ -23,6 +23,7 @@ from .streams import resolve_stream_url as resolve_music_stream_url
 
 class YouTubeMusicService:
     _STREAM_CACHE_TTL_SECONDS = 1800
+    _HOME_ROWS_PLAYLIST_DISCOVERY_LIMIT = 60
 
     def __init__(self):
         self._client = None
@@ -211,7 +212,7 @@ class YouTubeMusicService:
             seen_playlist_ids.add(playlist_id)
 
         try:
-            home_rows = client.get_home(limit=20)
+            home_rows = client.get_home(limit=self._HOME_ROWS_PLAYLIST_DISCOVERY_LIMIT)
         except Exception:
             home_rows = []
 

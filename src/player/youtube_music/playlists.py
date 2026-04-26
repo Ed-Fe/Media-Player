@@ -1,9 +1,11 @@
-from urllib.parse import urlencode, urlparse
+import re
+from urllib.parse import parse_qs, urlencode, urlparse
 
 from .models import YouTubeMusicPlaylistSummary
 
 
 YTMUSIC_SOURCE_PREFIX = "ytmusic://"
+PLAYLIST_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{8,}$")
 
 
 def playlist_track_count_text(item):
@@ -111,6 +113,33 @@ def extract_playlist_id_from_source(source_path):
 
     playlist_id = str(parsed_source.path or "").strip("/")
     return playlist_id or None
+
+
+def extract_playlist_id_from_text(source_text):
+    normalized_source_text = str(source_text or "").strip()
+    if not normalized_source_text:
+        return None
+
+    playlist_id = extract_playlist_id_from_source(normalized_source_text)
+    if playlist_id:
+        return playlist_id
+
+    parsed_source = urlparse(normalized_source_text)
+    if parsed_source.scheme or parsed_source.netloc:
+        query_playlist_ids = parse_qs(parsed_source.query).get("list") or []
+        for candidate in query_playlist_ids:
+            normalized_candidate = str(candidate or "").strip()
+            if normalized_candidate:
+                return normalized_candidate
+        return None
+
+    if any(character.isspace() for character in normalized_source_text):
+        return None
+
+    if PLAYLIST_ID_PATTERN.match(normalized_source_text):
+        return normalized_source_text
+
+    return None
 
 
 def is_youtube_music_media(media_path):

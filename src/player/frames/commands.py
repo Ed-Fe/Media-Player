@@ -3,7 +3,6 @@ import os
 import wx
 
 from ..constants import PLAYLIST_WILDCARD
-from ..equalizer import EqualizerTabPanel
 from ..library import (
     OPEN_MODE_FOLDER_BROWSER,
     OPEN_MODE_PLAYLIST,
@@ -451,13 +450,6 @@ class FrameCommandMixin:
     def on_video_panel_focus(self, _event):
         wx.CallAfter(self.SetFocus)
 
-    def _equalizer_page_is_active(self):
-        if not hasattr(self, "notebook"):
-            return False
-
-        current_page = self.notebook.GetCurrentPage()
-        return isinstance(current_page, EqualizerTabPanel)
-
     def _window_is_descendant_of(self, window, ancestor):
         current_window = window
         while isinstance(current_window, wx.Window):
@@ -467,32 +459,86 @@ class FrameCommandMixin:
 
         return False
 
-    def _equalizer_page_has_focus(self, event):
-        if not self._equalizer_page_is_active():
+    def _screen_tab_focusable_windows(self, root_window):
+        focusable_windows = []
+
+        def collect(window):
+            if not isinstance(window, wx.Window):
+                return
+
+            for child in window.GetChildren():
+                collect(child)
+
+            if window is root_window:
+                return
+
+            if not window.IsShownOnScreen() or not window.IsEnabled():
+                return
+
+            accepts_focus = False
+            try:
+                accepts_focus = bool(window.CanAcceptFocusFromKeyboard() or window.CanAcceptFocus())
+            except Exception:
+                accepts_focus = False
+
+            if accepts_focus:
+                focusable_windows.append(window)
+
+        collect(root_window)
+        return focusable_windows
+
+    def _focus_screen_tab_edge_control(self, current_page, *, backward=False):
+        focusable_windows = self._screen_tab_focusable_windows(current_page)
+        if not focusable_windows:
             return False
 
-        equalizer_panel = self.notebook.GetCurrentPage()
+        target_window = focusable_windows[-1] if backward else focusable_windows[0]
+        try:
+            target_window.SetFocus()
+            return True
+        except Exception:
+            return False
+
+    def _navigate_screen_tab_controls(self, *, backward=False):
+        current_page = self.notebook.GetCurrentPage() if hasattr(self, "notebook") else None
+        if not isinstance(current_page, wx.Window):
+            return False
+
         focused_window = wx.Window.FindFocus()
-        if self._window_is_descendant_of(focused_window, equalizer_panel):
+        navigation_target = (
+            focused_window
+            if isinstance(focused_window, wx.Window) and self._window_is_descendant_of(focused_window, current_page)
+            else current_page
+        )
+
+        navigation_flags = wx.NavigationKeyEvent.FromTab
+        navigation_flags |= wx.NavigationKeyEvent.IsBackward if backward else wx.NavigationKeyEvent.IsForward
+        try:
+            if navigation_target.Navigate(navigation_flags):
+                return True
+        except Exception:
+            pass
+
+        return self._focus_screen_tab_edge_control(current_page, backward=backward)
+
+    def _handle_screen_tab_key_down(self, event, current_tab):
+        if not isinstance(current_tab, ScreenTabState):
+            return False
+
+        key_code = event.GetKeyCode()
+
+        if key_code == wx.WXK_ESCAPE:
+            self._close_current_tab()
             return True
 
-        event_window = event.GetEventObject()
-        if isinstance(event_window, wx.Window) and self._window_is_descendant_of(event_window, equalizer_panel):
+        if key_code == wx.WXK_TAB and not event.ControlDown() and not event.AltDown():
+            if self._navigate_screen_tab_controls(backward=event.ShiftDown()):
+                return True
+            event.Skip()
             return True
 
-        return False
-
-    def _should_defer_key_to_equalizer_controls(self, event):
-        if not self._equalizer_page_is_active():
-            return False
-
-        if event.ControlDown():
-            return False
-
-        if event.GetKeyCode() == wx.WXK_F6:
-            return False
-
-        return self._equalizer_page_has_focus(event) or self._equalizer_page_is_active()
+        event.Skip()
+        return True
 
     def on_key_down(self, event):
         key_code = event.GetKeyCode()
@@ -503,8 +549,8 @@ class FrameCommandMixin:
             self.on_show_keyboard_help(None)
             return
 
-        if key_code == wx.WXK_F6:
-            self._toggle_navigation_mode()
+        if event.ControlDown() and event.ShiftDown() and key_code in (ord("Y"), ord("y")):
+            self.on_open_youtube_music(None)
             return
 
         if key_code == wx.WXK_ESCAPE and isinstance(current_tab, ScreenTabState):
@@ -515,11 +561,13 @@ class FrameCommandMixin:
             self._cycle_tabs(-1 if event.ShiftDown() else 1)
             return
 
-        if self._should_defer_key_to_equalizer_controls(event):
-            event.Skip()
+        if self._handle_screen_tab_key_down(event, current_tab):
             return
 
         if browser and browser.is_item_navigation_active() and not event.ControlDown() and not event.AltDown():
+            if key_code == wx.WXK_TAB:
+                self._toggle_navigation_mode()
+                return
             event.Skip()
             return
 
@@ -608,7 +656,7 @@ class FrameCommandMixin:
             return
 
         if key_code == wx.WXK_TAB:
-            self.SetFocus()
+            self._toggle_navigation_mode()
             return
 
         if key_code == wx.WXK_SPACE:

@@ -1,6 +1,9 @@
 from dataclasses import dataclass
 
 
+YOUTUBE_MUSIC_SCREEN_ID = "youtube_music"
+
+
 @dataclass(frozen=True)
 class YouTubeMusicPlaylistSummary:
     playlist_id: str

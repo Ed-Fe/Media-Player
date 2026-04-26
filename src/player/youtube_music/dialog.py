@@ -15,6 +15,33 @@ class YouTubeMusicBrowserAuthDialog(wx.Dialog):
         self._build_ui()
         self.SetSize((780, 560))
 
+    def _configure_file_picker_accessibility(self):
+        picker_text_ctrl = None
+        try:
+            picker_text_ctrl = self.browser_file_picker.GetTextCtrl()
+        except Exception:
+            picker_text_ctrl = None
+
+        if isinstance(picker_text_ctrl, wx.TextCtrl):
+            picker_text_ctrl.SetName("Caminho do arquivo de autenticação")
+            picker_text_ctrl.SetHelpText(
+                "Mostra o caminho do arquivo browser.json, JSON de cookies ou cookies.txt selecionado."
+            )
+
+        picker_button = None
+        try:
+            picker_button = self.browser_file_picker.GetPickerCtrl()
+        except Exception:
+            picker_button = None
+
+        if isinstance(picker_button, wx.Control):
+            picker_button.SetLabel("&Procurar...")
+            picker_button.SetName("Procurar arquivo de autenticação")
+            picker_button.SetHelpText(
+                "Abre a janela para procurar um browser.json, JSON de cookies ou cookies.txt."
+            )
+            picker_button.SetToolTip(picker_button.GetHelpText())
+
     def _build_ui(self):
         root_sizer = wx.BoxSizer(wx.VERTICAL)
 
@@ -32,7 +59,7 @@ class YouTubeMusicBrowserAuthDialog(wx.Dialog):
         headers_label = wx.StaticText(self, label="Cabeçalhos do navegador")
         self.headers_value = wx.TextCtrl(
             self,
-            style=wx.TE_MULTILINE | wx.TE_PROCESS_TAB,
+            style=wx.TE_MULTILINE,
         )
         self.headers_value.SetName("Cabeçalhos do YouTube Music")
         self.headers_value.SetHelpText(
@@ -54,6 +81,7 @@ class YouTubeMusicBrowserAuthDialog(wx.Dialog):
         self.browser_file_picker.SetHelpText(
             "Escolha um browser.json, um export JSON de cookies ou um cookies.txt do YouTube Music."
         )
+        self._configure_file_picker_accessibility()
         file_row.Add(file_label, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 8)
         file_row.Add(self.browser_file_picker, 1, wx.EXPAND)
 
@@ -69,7 +97,12 @@ class YouTubeMusicBrowserAuthDialog(wx.Dialog):
         button_sizer = self.CreateStdDialogButtonSizer(wx.OK | wx.CANCEL)
         ok_button = self.FindWindowById(wx.ID_OK)
         if ok_button is not None:
-            ok_button.SetLabel("Salvar autenticação")
+            ok_button.SetLabel("&Conectar")
+            ok_button.SetName("Conectar ao YouTube Music")
+            ok_button.SetHelpText(
+                "Valida os cabeçalhos ou o arquivo informado e conecta a conta do YouTube Music."
+            )
+            ok_button.SetToolTip(ok_button.GetHelpText())
         cancel_button = self.FindWindowById(wx.ID_CANCEL)
         if cancel_button is not None:
             cancel_button.SetLabel("Cancelar")

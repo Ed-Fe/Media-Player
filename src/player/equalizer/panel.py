@@ -17,7 +17,7 @@ class EqualizerTabPanel(wx.Panel):
         on_duplicate_preset,
         on_delete_preset,
     ):
-        super().__init__(parent)
+        super().__init__(parent, style=wx.TAB_TRAVERSAL)
 
         self._choice_preset_ids = []
         self._updating_controls = False
@@ -37,7 +37,7 @@ class EqualizerTabPanel(wx.Panel):
             label=(
                 "Ajuste o equalizador da aba de mídia ativa. "
                 "Use os botões para criar presets, editar ou duplicar presets personalizados "
-                "e salvar uma cópia editável de presets do VLC. "
+                "e salvar uma cópia editável de presets embutidos. "
                 "Quando quiser repetir a mesma configuração nas abas abertas, use Aplicar em todas as abas."
             ),
         )
@@ -98,7 +98,7 @@ class EqualizerTabPanel(wx.Panel):
         self._configure_action_button(
             self.edit_button,
             name="Editar preset do equalizador",
-            description="Edita o preset selecionado ou salva uma cópia se o preset for nativo do VLC.",
+            description="Edita o preset selecionado ou salva uma cópia se o preset for embutido.",
         )
         self._configure_action_button(
             self.duplicate_button,
@@ -184,7 +184,7 @@ class EqualizerTabPanel(wx.Panel):
             self._configure_action_button(
                 self.edit_button,
                 name="Salvar cópia do preset do equalizador",
-                description="Cria uma cópia editável do preset nativo do VLC selecionado.",
+                description="Cria uma cópia editável do preset embutido selecionado.",
             )
         else:
             self.edit_button.SetLabel("&Editar...")
@@ -213,7 +213,7 @@ class EqualizerTabPanel(wx.Panel):
             return description
 
         if selected_preset.is_builtin:
-            return "Preset nativo do VLC sem descrição adicional."
+            return "Preset embutido sem descrição adicional."
 
         return "Preset personalizado sem descrição adicional."
 
@@ -244,7 +244,7 @@ class EqualizerTabPanel(wx.Panel):
             self.preset_choice.Clear()
             self._choice_preset_ids = []
             for preset in presets:
-                suffix = " (VLC)" if preset.is_builtin else ""
+                suffix = " (embutido)" if preset.is_builtin else ""
                 self.preset_choice.Append(f"{preset.name}{suffix}")
                 self._choice_preset_ids.append(preset.preset_id)
 

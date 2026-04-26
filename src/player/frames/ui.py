@@ -9,7 +9,7 @@ class FrameUIMixin:
     def _primary_shortcuts_hint_text(self):
         return (
             "Atalhos principais: Ctrl+Alt+O abrir mídia, playlist ou pasta · Ctrl+O abrir arquivos ou playlist · Ctrl+Shift+O abrir pasta · "
-            "Espaço reproduzir/pausar · ←/→ buscar · ↑/↓ volume · F6 itens/player · F1 ajuda"
+            "Espaço reproduzir/pausar · ←/→ buscar · ↑/↓ volume · Tab itens/player · Ctrl+Shift+Y YouTube Music · F1 ajuda"
         )
 
     def _player_overlay_hint_text(self):
@@ -19,7 +19,8 @@ class FrameUIMixin:
             "Ctrl+O abre arquivos ou playlist\n"
             "Ctrl+Shift+O abre uma pasta no navegador\n"
             "Espaço reproduz ou pausa\n"
-            "F6 alterna entre itens e player\n"
+            "Tab alterna entre itens e player\n"
+            "Ctrl+Shift+Y abre a central do YouTube Music\n"
             "F1 mostra a ajuda rápida de atalhos"
         )
 
@@ -65,7 +66,8 @@ class FrameUIMixin:
             "V — Anunciar volume\n"
             "S — Anunciar status\n\n"
             "Navegação\n"
-            "F6 — Alternar entre a lista de itens e o player\n"
+            "Tab — Alternar entre a lista de itens e o player\n"
+            "Ctrl+Shift+Y — Abrir a central do YouTube Music em uma aba\n"
             "Enter — Tocar ou abrir o item selecionado no navegador\n"
             "Delete — Remover item da playlist\n"
             "Backspace — Voltar de pasta no navegador\n"
@@ -180,7 +182,8 @@ class FrameUIMixin:
         self.menu_open_source_id = wx.NewIdRef()
         self.menu_youtube_music_login_id = wx.NewIdRef()
         self.menu_youtube_music_disconnect_id = wx.NewIdRef()
-        self.menu_youtube_music_open_playlist_id = wx.NewIdRef()
+        self.menu_youtube_music_refresh_library_id = wx.NewIdRef()
+        self.menu_open_youtube_music_id = wx.NewIdRef()
         self.menu_save_playlist_id = wx.NewIdRef()
         self.menu_close_media_id = wx.NewIdRef()
         self.menu_close_tab_id = wx.NewIdRef()
@@ -196,8 +199,9 @@ class FrameUIMixin:
         file_menu.AppendSeparator()
         self.youtube_music_menu.Append(self.menu_youtube_music_login_id, "Conectar &conta...")
         self.youtube_music_menu.Append(self.menu_youtube_music_disconnect_id, "&Desconectar conta")
+        self.youtube_music_menu.Append(self.menu_youtube_music_refresh_library_id, "&Atualizar biblioteca")
         self.youtube_music_menu.AppendSeparator()
-        self.youtube_music_menu.Append(self.menu_youtube_music_open_playlist_id, "Abrir &playlist ou mix da conta...")
+        self.youtube_music_menu.Append(self.menu_open_youtube_music_id, "Abrir &central do YouTube Music...\tCtrl+Shift+Y")
         file_menu.AppendSubMenu(self.youtube_music_menu, "YouTube &Music")
         file_menu.AppendSeparator()
         self.recent_menu.AppendSubMenu(self.recent_files_menu, "Arquivos recentes")
@@ -236,9 +240,11 @@ class FrameUIMixin:
         playback_menu.AppendSubMenu(announce_menu, "&Anunciar")
 
         view_menu = wx.Menu()
+        self.view_menu = view_menu
         self.menu_playlist_browser_id = wx.NewIdRef()
-        view_menu.Append(self.menu_playlist_browser_id, "Alternar foco entre &itens e player\tF6")
+        view_menu.Append(self.menu_playlist_browser_id, "Alternar foco entre &itens e player\tTab")
         view_menu.Append(self.menu_open_equalizer_id, "Eq&ualizador por aba\tCtrl+Shift+E")
+        view_menu.Append(self.menu_open_youtube_music_id, "YouTube &Music por aba\tCtrl+Shift+Y")
 
         tabs_menu = wx.Menu()
         self.menu_next_tab_id = wx.NewIdRef()
@@ -352,7 +358,8 @@ class FrameUIMixin:
         self.Bind(wx.EVT_MENU, self.on_open_source, id=self.menu_open_source_id)
         self.Bind(wx.EVT_MENU, self.on_connect_youtube_music, id=self.menu_youtube_music_login_id)
         self.Bind(wx.EVT_MENU, self.on_disconnect_youtube_music, id=self.menu_youtube_music_disconnect_id)
-        self.Bind(wx.EVT_MENU, self.on_open_youtube_music_playlist, id=self.menu_youtube_music_open_playlist_id)
+        self.Bind(wx.EVT_MENU, self.on_refresh_youtube_music_library, id=self.menu_youtube_music_refresh_library_id)
+        self.Bind(wx.EVT_MENU, self.on_open_youtube_music, id=self.menu_open_youtube_music_id)
         self.Bind(wx.EVT_MENU, self.on_save_playlist, id=self.menu_save_playlist_id)
         self.Bind(wx.EVT_MENU, self.on_previous_track, id=self.menu_previous_track_id)
         self.Bind(wx.EVT_MENU, self.on_play_pause, id=self.menu_play_pause_id)
