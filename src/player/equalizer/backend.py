@@ -58,6 +58,15 @@ def _band_width_octaves(band_frequencies_hz, index):
     return max(0.25, round(0.5 * math.log2(next_frequency / previous_frequency), 3))
 
 
+def _safe_preamp_db(preamp_db, band_gains_db):
+    requested_preamp_db = clamp_gain_db(preamp_db)
+    highest_boost_db = max([0.0, *band_gains_db]) if band_gains_db else 0.0
+    if highest_boost_db <= 0.0:
+        return requested_preamp_db
+
+    return min(requested_preamp_db, clamp_gain_db(-highest_boost_db))
+
+
 def build_mpv_equalizer_filter(preset, *, band_frequencies_hz):
     if preset is None:
         return ""
@@ -66,7 +75,7 @@ def build_mpv_equalizer_filter(preset, *, band_frequencies_hz):
         preset.band_gains_db,
         expected_count=len(band_frequencies_hz),
     )
-    filter_parts = [f"volume=volume={clamp_gain_db(preset.preamp_db):.1f}dB"]
+    filter_parts = [f"volume=volume={_safe_preamp_db(preset.preamp_db, normalized_band_gains):.1f}dB"]
     for band_index, frequency_hz in enumerate(band_frequencies_hz):
         filter_parts.append(
             "equalizer="
